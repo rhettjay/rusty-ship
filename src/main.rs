@@ -44,12 +44,12 @@ async fn main() {
         None
     );
 
-    let ship_asset = Texture2D::from_file_with_format(
+    let ship_sprite = Texture2D::from_file_with_format(
         include_bytes!("../assets/ship.png"),
         None
     );
 
-    let pirate_asset = Texture2D::from_file_with_format(
+    let pirate_sprite = Texture2D::from_file_with_format(
         include_bytes!("../assets/pirate.png"),
         None
     );
@@ -78,8 +78,8 @@ async fn main() {
                     &mut pirate_vec, 
                     &mut pirate_count, 
                     &background_asset, 
-                    &ship_asset,
-                    &pirate_asset,
+                    &ship_sprite,
+                    &pirate_sprite,
                     &gameover_audio,
                     &cannonball_audio,
                     &explosion_audio
