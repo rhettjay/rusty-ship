@@ -1,0 +1,9 @@
+[package]
+name = "Space Pirates"
+
+[dependencies]
+ggez = "0.6"
+macroquad = "0.3.13"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
