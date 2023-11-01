@@ -30,9 +30,9 @@ async fn main() {
     let mut game_score: i32 = 0; 
     let mut ship: Ship = Ship {
         //Set ship middle of screen
-        x: Conf::default().window_width as f32 / 2.0 - 30.0;
+        x: screen_width() * 0.5f32;
         //Set ship bottom of screen
-        y: Conf::default().window_height as f32 / 2.0 - 80.0;
+        y: screen_height() - 100f32;
         w: 60.0;
         speed: 5.0;
         color: GRAY;
@@ -69,6 +69,7 @@ async fn main() {
                 pirate_vec = vec![];
                 cannoball_vec = vec![];
                 score = 0; 
+                lives = 3; 
                 ship.gameover = false; 
             } else {
                 game_logic(
@@ -87,5 +88,4 @@ async fn main() {
             next_frame().await
         }
     }
-
 }
