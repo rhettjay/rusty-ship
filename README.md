@@ -3,5 +3,4 @@
 
 # TODO:
 - make enemies come in waves
-- refactor sprites language
 - design sprite assets
