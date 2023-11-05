@@ -50,6 +50,7 @@ impl Pirate {
     }
 
     pub fn draw(&self, texture: &Texture2D) {
-        draw_texture(*texture, self.x, self.y, self.color,self.is_special, self.is_challenger)
+        draw_texture(*texture, self.x, self.y, self.color)
+        // TODO figureo out how to add self.is_special, self.is_challenger
     }
 }

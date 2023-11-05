@@ -1,4 +1,3 @@
-extern crate ggez;
 use ggez::*;
 use ggez::event;
 use ggez::graphics;
@@ -8,7 +7,7 @@ mod ship;
 mod cannonball;
 
 use ship::*;
-use priate::*;
+use pirate::*;
 use cannonball::*;
 
 fn buffer_screen() -> Config {
@@ -16,7 +15,7 @@ fn buffer_screen() -> Config {
         window_resizable: false,
         window_width: 800,
         window_height: 800,
-        window_title: "Space Pirates".to_string(),
+        window_title: "rusty-ship".to_string(),
         ..Default::default()
     }
 }
@@ -30,9 +29,9 @@ async fn main() {
     let mut game_score: i32 = 0; 
     let mut ship: Ship = Ship {
         //Set ship middle of screen
-        x: screen_width() * 0.5f32;
+        x: screen_width() * 0.5;
         //Set ship bottom of screen
-        y: screen_height() - 100f32;
+        y: screen_height() - 100;
         w: 60.0;
         speed: 5.0;
         color: GRAY;
@@ -40,7 +39,7 @@ async fn main() {
     };
 
     let background_asset = Texture2D::from_file_with_format(
-        include_bytes!("../assets/background.png"),
+        include_bytes!("../assets/background/background.png"),
         None
     );
 

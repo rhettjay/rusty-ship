@@ -4,9 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ggez = "0.6"
-macroquad = "0.3.13"
-
-[target.'cfg(windows)'.build-dependencies]
-winres = "0.1.12"
-
+ggez = "0.9.3"
+macroquad = "0.4.4"
