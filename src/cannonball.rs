@@ -11,16 +11,17 @@ pub struct Cannonball {
 }
 
 impl Cannonball {
-    pub fn new(x: f32, y: f32, speed: f32, color: Color, damage: f32, powerup: f32, is_ready:bool) {
-        Self (
-            x,
-            y,
-            speed,
-            color,
-            damage,
-            powerup,
-            is_ready
-        )
+    pub fn new(
+        x: f32,
+        y: f32,
+        speed: f32,
+        color: Color,
+        damage: f32,
+        powerup: f32,
+        is_ready: bool,
+        &self
+    ) {
+        self(x, y, speed, color, damage, powerup, is_ready)
     }
     pub fn fire(&mut self) {
         self.is_ready = false;
@@ -48,3 +49,4 @@ impl Cannonball {
         draw_rectange(self.x, self.y - 5.0, 5.0, 15.0, self.color);
     }
 }
+

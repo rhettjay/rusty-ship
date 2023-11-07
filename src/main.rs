@@ -23,7 +23,7 @@ fn buffer_screen() -> Config {
 #[macroquad::main(window_conf)]
 async fn main() {
     show_mouse(false);
-    let mut cannoball_vec: Vec<CannonBall> = vec![];
+    let mut cannoball_vec: Vec<cannonball> = vec![];
     let mut pirate_vec: Vec<Pirate> = vec![];
     let mut pirate_count: i32 = 10; 
     let mut game_score: i32 = 0; 
