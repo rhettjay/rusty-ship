@@ -1,5 +1,7 @@
 use macroquad::prelude::*;
-use rand::Rng;
+use ::rand::Rng;
+
+pub const PIRATE_ROTATION: f32 = 3.14159265359;
 
 pub struct Pirate {
     pub x: f32,
@@ -10,47 +12,47 @@ pub struct Pirate {
     pub is_dead: bool,
     pub is_special: bool,
     pub is_shoot: bool,
-    pub is_challenger: bool
+    pub is_challenger: bool,
 }
 
 impl Pirate {
-
-    pub fn new(x: f32, y: f32, speed_x: f32, speed_y: f32, color: Color, is_dead: bool, is_special: bool, is_shoot: bool, is_challenger: bool) -> Self {
-        self {
+    pub fn new(x: f32, y: f32, speed_x: f32) -> Self {
+        let mut rng = ::rand::thread_rng();
+        Self {
             x,
             y,
             speed_x,
-            speed_y,
-            color,
-            is_dead,
-            is_special,
-            is_shoot,
-            is_challenger
+            speed_y: rng.gen_range(1.0..3.0),
+            color: WHITE,
+            is_dead: false,
+            is_special: false,
+            is_shoot: false,
+            is_challenger: false,
         }
     }
 
     pub fn update(&mut self) {
         self.x += self.speed_x;
         self.y += self.speed_y;
-        // Did they drop a bomb
-        let shoot_chance = rand::thread_rnd().gen_range(0..15);
-        if shoot_chance > 10 {
-            self.is_shoot = true;
-        } else {
-            self.is_shoot = false;
-        }
-
-        // Did they drop a gift 
-        let special_chance = rand::thread_rnd().gen_range(0..45);
-        if special_chance > 10 {
-            self.is_special = true;
-        } else {
-            self.is_special = false;
-        }
+        
+        let mut rng = ::rand::thread_rng();
+        let shoot_chance = rng.gen_range(0..15);
+        self.is_shoot = shoot_chance > 10;
+        
+        let special_chance = rng.gen_range(0..45);
+        self.is_special = special_chance > 10;
     }
 
     pub fn draw(&self, texture: &Texture2D) {
-        draw_texture(*texture, self.x, self.y, self.color)
-        // TODO figureo out how to add self.is_special, self.is_challenger
+        draw_texture_ex(
+            texture,
+            self.x,
+            self.y,
+            self.color,
+            DrawTextureParams {
+                rotation: PIRATE_ROTATION,
+                ..Default::default()
+            }
+        );
     }
 }

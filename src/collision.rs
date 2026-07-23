@@ -1,15 +1,22 @@
-fn check_collision(a: &Hitbox, b: &Hitbox) -> bool {
-    let left_a = a.x;
-    let right_a = a.x + a.width;
-    let top_a = a.y;
-    let bottom_a = a.y + a.height;
+use macroquad::prelude::*;
 
-    let left_b = b.x;
-    let right_b = b.x + b.width;
-    let top_b = b.y;
-    let bottom_b = b.y + b.height;
-
-    // Check for collision by comparing the coordinates of the hitboxes.
-    return right_a > left_b && left_a < right_b && bottom_a > top_b && top_a < bottom_b;
+#[derive(Clone, Copy)]
+pub struct Hitbox {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
 }
 
+impl Hitbox {
+    pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self { x, y, w, h }
+    }
+}
+
+pub fn check_collision(a: &Hitbox, b: &Hitbox) -> bool {
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+}

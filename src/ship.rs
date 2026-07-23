@@ -15,10 +15,10 @@ impl Ship {
     }
 
     pub fn right(&mut self) {
-        self.y -= self.speed;
+        self.x += self.speed;
     }
 
-    pub fn draw(&mut self, texture: &Texture2D) {
-        draw_texture(*texture, self.x, self.y, self.color)
+    pub fn draw(&self, texture: &Texture2D) {
+        draw_texture(texture, self.x, self.y, self.color);
     }
 }
