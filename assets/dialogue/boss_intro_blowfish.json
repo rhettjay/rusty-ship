@@ -1,0 +1,28 @@
+{
+  "id": "boss_intro_blowfish",
+  "character": "Blowfish",
+  "portrait": "blowfish",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Arrr! I be Blowfish, First Mate to Cap'n Davey!",
+      "character": "Blowfish",
+      "portrait": "blowfish",
+      "emotion": "proud"
+    },
+    {
+      "text": "Me puffer cannons'll blow yer ship to smithereens!",
+      "character": "Blowfish",
+      "portrait": "blowfish",
+      "emotion": "threatening"
+    },
+    {
+      "text": "Prepare for a blastin' good time, har har har!",
+      "character": "Blowfish",
+      "portrait": "blowfish",
+      "emotion": "laughing"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(Blowfish)"
+}

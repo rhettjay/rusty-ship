@@ -23,6 +23,18 @@ pub struct GameConfig {
     
     pub starting_lives: i32,
     pub starting_pirate_count: i32,
+    
+    pub waves_per_chapter: u32,
+    pub boss_waves: &'static [u32],
+    pub boss_types: &'static [&'static str],
+    pub bonus_score_threshold: i32,
+    
+    pub dialogue_typewriter_speed: f32,
+    pub dialogue_box_padding: f32,
+    pub dialogue_portrait_size: f32,
+    
+    pub music_volume: f32,
+    pub sfx_volume: f32,
 }
 
 impl GameConfig {
@@ -52,6 +64,18 @@ impl GameConfig {
             
             starting_lives: 3,
             starting_pirate_count: 10,
+            
+            waves_per_chapter: 3,
+            boss_waves: &[3, 6, 9, 12, 15],
+            boss_types: &["Blowfish", "Twofish", "RufusReverse", "MollyHashpass", "CaptainDavey"],
+            bonus_score_threshold: 50000,
+            
+            dialogue_typewriter_speed: 30.0,
+            dialogue_box_padding: 20.0,
+            dialogue_portrait_size: 128.0,
+            
+            music_volume: 0.5,
+            sfx_volume: 0.7,
         }
     }
 }

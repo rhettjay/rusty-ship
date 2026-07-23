@@ -1,0 +1,28 @@
+{
+  "id": "boss_intro_twofish",
+  "character": "Twofish",
+  "portrait": "twofish",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Heh heh... Blowfish was always the weak one.",
+      "character": "Twofish",
+      "portrait": "twofish",
+      "emotion": "smug"
+    },
+    {
+      "text": "I be Twofish, Second Mate. We share everything...",
+      "character": "Twofish",
+      "portrait": "twofish",
+      "emotion": "creepy"
+    },
+    {
+      "text": "Including yer demise! Mirror, mirror, on the hull...",
+      "character": "Twofish",
+      "portrait": "twofish",
+      "emotion": "laughing"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(Twofish)"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "bonus_boss_deadbeef",
+  "character": "Deadbeef",
+  "portrait": "deadbeef",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Arrr! Ye found me secret kitchen, did ye?",
+      "character": "Deadbeef",
+      "portrait": "deadbeef",
+      "emotion": "surprised"
+    },
+    {
+      "text": "I be Deadbeef, the Cook! Me recipes be... DEADLY!",
+      "character": "Deadbeef",
+      "portrait": "deadbeef",
+      "emotion": "proud"
+    },
+    {
+      "text": "Try me SPECIAL: Buffer Overflow Burger with a side of Stack Smash Fries!",
+      "character": "Deadbeef",
+      "portrait": "deadbeef",
+      "emotion": "laughing"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(Deadbeef)"
+}

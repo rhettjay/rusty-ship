@@ -1,0 +1,28 @@
+{
+  "id": "boss_intro_molly_hashpass",
+  "character": "MollyHashpass",
+  "portrait": "molly_hashpass",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Oh my... another patient for me operating table?",
+      "character": "MollyHashpass",
+      "portrait": "molly_hashpass",
+      "emotion": "concerned"
+    },
+    {
+      "text": "I be Molly Hashpass, Ship's Surgeon. Me remedies...",
+      "character": "MollyHashpass",
+      "portrait": "molly_hashpass",
+      "emotion": "sinister"
+    },
+    {
+      "text": "...are TO DIE FOR! Heh heh heh...",
+      "character": "MollyHashpass",
+      "portrait": "molly_hashpass",
+      "emotion": "laughing"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(MollyHashpass)"
+}

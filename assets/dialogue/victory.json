@@ -1,0 +1,46 @@
+{
+  "id": "victory",
+  "character": "Narrator",
+  "portrait": "narrator",
+  "background_music": "victory_music",
+  "lines": [
+    {
+      "text": "The digital seas grow calm once more...",
+      "character": "Narrator",
+      "portrait": "narrator",
+      "emotion": "peaceful"
+    },
+    {
+      "text": "Captain Davey Portscan's reign of terror has ended.",
+      "character": "Narrator",
+      "portrait": "narrator",
+      "emotion": "serious"
+    },
+    {
+      "text": "His crew scattered to the four winds... or rather, the four ports.",
+      "character": "Narrator",
+      "portrait": "narrator",
+      "emotion": "amused"
+    },
+    {
+      "text": "Ye stand victorious, Captain. The Rusty Ship sails on!",
+      "character": "Narrator",
+      "portrait": "narrator",
+      "emotion": "triumphant"
+    },
+    {
+      "text": "But remember... there be always more ports to scan...",
+      "character": "Narrator",
+      "portrait": "narrator",
+      "emotion": "mysterious"
+    },
+    {
+      "text": "VICTORY! Thanks for playing Rusty Ship!",
+      "character": "Narrator",
+      "portrait": "narrator",
+      "emotion": "happy"
+    }
+  ],
+  "choices": null,
+  "on_complete": "GameComplete"
+}

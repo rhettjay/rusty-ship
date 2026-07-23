@@ -1,0 +1,34 @@
+{
+  "id": "intro",
+  "character": "CaptainDavey",
+  "portrait": "captain_davey_portscan",
+  "background_music": "menu_music",
+  "lines": [
+    {
+      "text": "Ahoy there, code-slinger! Welcome to me domain!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "laughing"
+    },
+    {
+      "text": "I be Captain Davey Portscan, scourge of the seven C's!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "proud"
+    },
+    {
+      "text": "Me crew be scannin' yer ports for vulnerabilities as we speak...",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "scheming"
+    },
+    {
+      "text": "Prepare to be boarded, landlubber! YA-HARR!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "laughing"
+    }
+  ],
+  "choices": null,
+  "on_complete": "ResumeGame"
+}

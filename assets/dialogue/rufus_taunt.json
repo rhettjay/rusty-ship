@@ -1,0 +1,22 @@
+{
+  "id": "rufus_taunt",
+  "character": "RufusReverse",
+  "portrait": "rufus_reverse",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Sorcery? Nay, 'tis merely... REVERSE ENGINEERING!",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "laughing"
+    },
+    {
+      "text": "Now suffer me patented control inversion!",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "casting"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(RufusReverse)"
+}

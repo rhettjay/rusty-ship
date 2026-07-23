@@ -1,0 +1,22 @@
+{
+  "id": "boss_defeat_rufus_reverse",
+  "character": "RufusReverse",
+  "portrait": "rufus_reverse",
+  "background_music": "gameplay_music",
+  "lines": [
+    {
+      "text": "Arrgh! Me reversal... reversed?! Impossible!",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "shocked"
+    },
+    {
+      "text": "The Surgeon... she'll patch ye up good...",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "dying"
+    }
+  ],
+  "choices": null,
+  "on_complete": "NextChapter"
+}

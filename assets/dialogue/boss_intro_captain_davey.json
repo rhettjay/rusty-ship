@@ -1,0 +1,28 @@
+{
+  "id": "boss_intro_captain_davey",
+  "character": "CaptainDavey",
+  "portrait": "captain_davey_portscan",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Well, well, well... Ye've made it far, haven't ye?",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "impressed"
+    },
+    {
+      "text": "But now ye face the CAPTAIN! Davey Portscan himself!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "proud"
+    },
+    {
+      "text": "Me portscan sees ALL yer weaknesses! Prepare for a FULL BROADSIDE!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "threatening"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(CaptainDavey)"
+}

@@ -1,0 +1,39 @@
+{
+  "id": "boss_intro_rufus_reverse",
+  "character": "RufusReverse",
+  "portrait": "rufus_reverse",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Heh heh heh... The Quartermaster has arrived.",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "smug"
+    },
+    {
+      "text": "I've reversed yer controls, landlubber! Left is right...",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "casting"
+    },
+    {
+      "text": "Up is down... can yer tiny brain handle it?",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "laughing"
+    }
+  ],
+  "choices": [
+    {
+      "text": "I'll adapt!",
+      "next_dialogue": "rufus_fight",
+      "callback": null
+    },
+    {
+      "text": "This be sorcery!",
+      "next_dialogue": "rufus_taunt",
+      "callback": null
+    }
+  ],
+  "on_complete": null
+}

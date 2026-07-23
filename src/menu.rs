@@ -1,15 +1,44 @@
 use macroquad::prelude::*;
+use crate::boss::BossType;
+use std::collections::HashSet;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum GameState {
     MainMenu,
     Playing,
     GameOver,
+    Dialogue(DialogueContext),
+    BossIntro(BossType),
+    Victory,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct DialogueContext {
+    pub dialogue_id: String,
+    pub on_complete: DialogueCallback,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum DialogueCallback {
+    ResumeGame,
+    SpawnBoss(BossType),
+    NextChapter,
+    GameComplete,
 }
 
 pub struct Game {
     pub state: GameState,
     pub selected_menu_item: usize,
+    pub narrative: NarrativeProgress,
+}
+
+#[derive(Clone, Debug)]
+pub struct NarrativeProgress {
+    pub current_chapter: u8,
+    pub defeated_bosses: HashSet<BossType>,
+    pub flags: HashSet<String>,
+    pub score_at_chapter_start: i32,
+    pub current_wave: u32,
 }
 
 impl Game {
@@ -17,6 +46,19 @@ impl Game {
         Self {
             state: GameState::MainMenu,
             selected_menu_item: 0,
+            narrative: NarrativeProgress::new(),
+        }
+    }
+}
+
+impl NarrativeProgress {
+    pub fn new() -> Self {
+        Self {
+            current_chapter: 0,
+            defeated_bosses: HashSet::new(),
+            flags: HashSet::new(),
+            score_at_chapter_start: 0,
+            current_wave: 0,
         }
     }
 }

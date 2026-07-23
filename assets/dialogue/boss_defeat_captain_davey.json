@@ -1,0 +1,34 @@
+{
+  "id": "boss_defeat_captain_davey",
+  "character": "CaptainDavey",
+  "portrait": "captain_davey_portscan",
+  "background_music": "victory_music",
+  "lines": [
+    {
+      "text": "Me portscan... returning... NO RESULTS FOUND?!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "shocked"
+    },
+    {
+      "text": "Impossible! I am the SCANNER! I see ALL!",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "denial"
+    },
+    {
+      "text": "Ye... ye truly be the greatest hacker-pirate...",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "respect"
+    },
+    {
+      "text": "Take me hat... ye've earned it. YA-HARR... *cough*",
+      "character": "CaptainDavey",
+      "portrait": "captain_davey_portscan",
+      "emotion": "dying"
+    }
+  ],
+  "choices": null,
+  "on_complete": "GameComplete"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "boss_defeat_twofish",
+  "character": "Twofish",
+  "portrait": "twofish",
+  "background_music": "gameplay_music",
+  "lines": [
+    {
+      "text": "Our reflection... shattered...",
+      "character": "Twofish",
+      "portrait": "twofish",
+      "emotion": "shocked"
+    },
+    {
+      "text": "Rufus... the Quartermaster... he'll flip yer world...",
+      "character": "Twofish",
+      "portrait": "twofish",
+      "emotion": "dying"
+    }
+  ],
+  "choices": null,
+  "on_complete": "NextChapter"
+}

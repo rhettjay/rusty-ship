@@ -1,0 +1,22 @@
+{
+  "id": "boss_defeat_molly_hashpass",
+  "character": "MollyHashpass",
+  "portrait": "molly_hashpass",
+  "background_music": "gameplay_music",
+  "lines": [
+    {
+      "text": "Me potions... failed?! The Captain... he'll have me head...",
+      "character": "MollyHashpass",
+      "portrait": "molly_hashpass",
+      "emotion": "shocked"
+    },
+    {
+      "text": "Captain Davey... he scans all... he knows all... beware...",
+      "character": "MollyHashpass",
+      "portrait": "molly_hashpass",
+      "emotion": "dying"
+    }
+  ],
+  "choices": null,
+  "on_complete": "NextChapter"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "boss_defeat_blowfish",
+  "character": "Blowfish",
+  "portrait": "blowfish",
+  "background_music": "gameplay_music",
+  "lines": [
+    {
+      "text": "Me puffer... deflated?! No... not possible!",
+      "character": "Blowfish",
+      "portrait": "blowfish",
+      "emotion": "shocked"
+    },
+    {
+      "text": "Twofish... avenge me... me twin...",
+      "character": "Blowfish",
+      "portrait": "blowfish",
+      "emotion": "dying"
+    }
+  ],
+  "choices": null,
+  "on_complete": "NextChapter"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "rufus_fight",
+  "character": "RufusReverse",
+  "portrait": "rufus_reverse",
+  "background_music": "boss_music",
+  "lines": [
+    {
+      "text": "Bold words! Let's see if yer actions match!",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "excited"
+    },
+    {
+      "text": "REVERSE PROTOCOL: ENGAGE!",
+      "character": "RufusReverse",
+      "portrait": "rufus_reverse",
+      "emotion": "casting"
+    }
+  ],
+  "choices": null,
+  "on_complete": "SpawnBoss(RufusReverse)"
+}
