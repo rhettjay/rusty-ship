@@ -13,6 +13,8 @@ pub struct Pirate {
     pub is_special: bool,
     pub is_shoot: bool,
     pub is_challenger: bool,
+    pub width: f32,
+    pub height: f32,
 }
 
 impl Pirate {
@@ -28,6 +30,8 @@ impl Pirate {
             is_special: false,
             is_shoot: false,
             is_challenger: false,
+            width: 32.0,
+            height: 32.0,
         }
     }
 
@@ -50,9 +54,14 @@ impl Pirate {
             self.y,
             self.color,
             DrawTextureParams {
+                dest_size: Some(Vec2::new(self.width, self.height)),
                 rotation: PIRATE_ROTATION,
                 ..Default::default()
             }
         );
+    }
+    
+    pub fn get_rect(&self) -> (f32, f32, f32, f32) {
+        (self.x, self.y, self.width, self.height)
     }
 }

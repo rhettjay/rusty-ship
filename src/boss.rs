@@ -103,6 +103,12 @@ pub struct BossProjectile {
     pub pattern: ProjectilePattern,
 }
 
+impl BossProjectile {
+    pub fn get_rect(&self) -> (f32, f32, f32, f32) {
+        (self.x - self.size / 2.0, self.y - self.size / 2.0, self.size, self.size)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum ProjectilePattern {
     Straight,
@@ -906,6 +912,10 @@ impl Boss {
             return true;
         }
         false
+    }
+
+    pub fn get_rect(&self) -> (f32, f32, f32, f32) {
+        (self.x, self.y, self.width, self.height)
     }
 
     pub fn check_projectile_collision(&self, px: f32, py: f32, pw: f32, ph: f32) -> bool {
