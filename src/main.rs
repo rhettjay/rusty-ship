@@ -1,5 +1,4 @@
 use macroquad::prelude::*;
-use macroquad::audio::load_sound_from_bytes;
 
 mod config;
 mod collision;
@@ -13,11 +12,16 @@ mod portrait;
 mod audio;
 mod boss;
 mod narrative;
+mod enemy;
+mod bullet;
+mod powerup;
+mod formation;
+mod wave_director;
+mod save;
 
 use ship::*;
 use pirate::*;
 use cannonball::*;
-use logic::*;
 use menu::*;
 use config::CONFIG;
 use dialogue::DialogueEngine;
@@ -25,12 +29,17 @@ use portrait::PortraitManager;
 use audio::{init_audio, play_music, play_sfx, update_audio, set_music_volume, set_sfx_volume};
 use boss::{Boss, BossType};
 use narrative::{check_triggers, NarrativeTrigger, get_chapter_name};
+use enemy::Enemy;
+use bullet::Bullet;
+use wave_director::{WaveDirector, WaveState};
+use save::{save_game, load_game, apply_save};
+use std::collections::HashMap;
 
 #[macroquad::main("rusty-ship")]
 async fn main() {
     show_mouse(false);
     
-    let audio_manager = init_audio().await;
+    let _audio_manager = init_audio().await;
     set_music_volume(CONFIG.music_volume);
     set_sfx_volume(CONFIG.sfx_volume);
     
@@ -47,19 +56,25 @@ async fn main() {
     let mut pirate_count: i32 = CONFIG.starting_pirate_count;
     let mut game_score: i32 = 0;
     let mut lives: i32 = CONFIG.starting_lives;
-    let mut current_wave: u32 = 0;
     
     let mut ship = Ship {
         x: screen_width() * 0.5 - CONFIG.ship_width * 0.5,
         y: screen_height() - CONFIG.ship_start_y_offset,
         w: CONFIG.ship_width,
+        h: CONFIG.ship_height,
         speed: CONFIG.ship_speed,
         color: GRAY,
         gameover: false,
+        has_shield: false,
+        rapid_fire_timer: 0.0,
+        spread_shot_timer: 0.0,
+        pierce_timer: 0.0,
     };
 
-    let mut current_boss: Option<Boss> = None;
-    let boss_spawn_pending: Option<BossType> = None;
+    let mut enemy_vec: Vec<Enemy> = vec![];
+    let mut bullet_vec: Vec<Bullet> = vec![];
+    
+    let mut wave_director = WaveDirector::new();
     
     let background_asset = Texture2D::from_file_with_format(
         include_bytes!("../assets/background/background.png"),
@@ -76,13 +91,10 @@ async fn main() {
         None,
     );
 
-    let gameover_audio = load_sound_from_bytes(include_bytes!("../assets/gameover.wav")).await.unwrap();
-    let cannonball_audio = load_sound_from_bytes(include_bytes!("../assets/cannonball.wav")).await.unwrap();
-    let explosion_audio = load_sound_from_bytes(include_bytes!("../assets/explosion.wav")).await.unwrap();
+    let enemy_sprites: HashMap<String, Texture2D> = HashMap::new();
+    let bullet_sprites: HashMap<String, Texture2D> = HashMap::new();
 
     let mut last_shot_time = get_time();
-    let mut last_wave_time = get_time();
-    let mut wave_clear_check = false;
 
     play_music("menu_music");
 
@@ -96,24 +108,45 @@ async fn main() {
                 draw_menu(&game, &background_asset);
                 
                 if is_key_pressed(KeyCode::Up) {
-                    game.selected_menu_item = (game.selected_menu_item + 2) % 3;
+                    game.selected_menu_item = (game.selected_menu_item + 3) % 4;
                 }
                 if is_key_pressed(KeyCode::Down) {
-                    game.selected_menu_item = (game.selected_menu_item + 1) % 3;
+                    game.selected_menu_item = (game.selected_menu_item + 1) % 4;
                 }
                 if is_key_pressed(KeyCode::Enter) {
                     match game.selected_menu_item {
                         0 => {
                             game.state = GameState::Playing;
                             reset_game(&mut ship, &mut cannonball_vec, &mut pirate_vec, 
-                                     &mut pirate_count, &mut game_score, &mut lives,
-                                     &mut current_wave, &mut current_boss);
+                                     &mut enemy_vec, &mut bullet_vec, &mut pirate_count, 
+                                     &mut game_score, &mut lives);
+                            wave_director.start_wave(1);
                             play_music("gameplay_music");
+                            show_mouse(false);
                         }
-                        1 => {
-                            game.state = GameState::GameOver;
+                        1 => { // Load Game
+                            match load_game() {
+                                Ok(save) => {
+                                    apply_save(save, &mut ship, &mut wave_director, &mut game, &mut game_score, &mut lives);
+                                    // Clear existing entities
+                                    enemy_vec.clear();
+                                    bullet_vec.clear();
+                                    cannonball_vec.clear();
+                                    pirate_vec.clear();
+                                    game.state = GameState::Playing;
+                                    play_music("gameplay_music");
+                                    show_mouse(false);
+                                }
+                                Err(e) => {
+                                    eprintln!("Load failed: {}", e);
+                                    // Could show error message
+                                }
+                            }
                         }
                         2 => {
+                            game.state = GameState::GameOver;
+                        }
+                        3 => {
                             std::process::exit(0);
                         }
                         _ => {}
@@ -124,6 +157,22 @@ async fn main() {
                 }
             }
             GameState::Playing => {
+                // Pause handling
+                if is_key_pressed(KeyCode::Escape) {
+                    game.state = GameState::Paused { selected_item: 0 };
+                    show_mouse(true);
+                }
+                
+                // Console handling (forward slash key)
+                if is_key_pressed(KeyCode::Slash) {
+                    game.state = GameState::Console {
+                        input: String::new(),
+                        history: Vec::new(),
+                        cursor_pos: 0,
+                    };
+                    show_mouse(true);
+                }
+                
                 if is_key_down(KeyCode::Left) {
                     ship.left();
                 }
@@ -132,105 +181,217 @@ async fn main() {
                 }
                 if is_key_down(KeyCode::Space) {
                     let now = get_time();
-                    if now - last_shot_time >= CONFIG.cannonball_cooldown {
-                        cannonball_vec.push(Cannonball::new(
-                            ship.x + ship.w * 0.5 - CONFIG.cannonball_width * 0.5,
-                            ship.y - CONFIG.cannonball_height,
-                            CONFIG.cannonball_speed,
-                            WHITE,
-                        ));
+                    let cooldown = wave_director.get_cannonball_cooldown(CONFIG.cannonball_cooldown);
+                    if now - last_shot_time >= cooldown {
+                        let bullet_type = if wave_director.is_spread_shot_active() {
+                            crate::bullet::BulletType::PlayerSpread
+                        } else if wave_director.is_pierce_active() {
+                            crate::bullet::BulletType::PlayerPierce
+                        } else {
+                            crate::bullet::BulletType::PlayerStandard
+                        };
+                        
+                        let bullet_speed = bullet_type.speed();
+                        
+                        let bullets = if bullet_type == crate::bullet::BulletType::PlayerSpread {
+                            crate::bullet::create_spread_bullets(
+                                bullet_type,
+                                ship.x + ship.w * 0.5,
+                                ship.y - CONFIG.cannonball_height,
+                                0.0,
+                                -bullet_speed,
+                                3,
+                                std::f32::consts::FRAC_PI_4,
+                            )
+                        } else {
+                            vec![Bullet::new(
+                                bullet_type,
+                                ship.x + ship.w * 0.5 - CONFIG.cannonball_width * 0.5,
+                                ship.y - CONFIG.cannonball_height,
+                                0.0,
+                                -bullet_speed,
+                            )]
+                        };
+                        
+                        for b in bullets {
+                            bullet_vec.push(b);
+                        }
+                        
                         play_sfx("cannon_fire");
                         last_shot_time = now;
                     }
                 }
                 
-                if let Some(boss) = &mut current_boss {
-                    if boss.entry_anim {
-                        boss.update(dt, ship.x, ship.y);
-                    } else {
-                        let result = run_with_boss(
-                            &mut ship,
-                            &mut cannonball_vec,
-                            &mut pirate_vec,
-                            &mut pirate_count,
-                            &mut game_score,
-                            &mut lives,
-                            &background_asset,
-                            &ship_sprite,
-                            &pirate_sprite,
-                            &cannonball_audio,
-                            &explosion_audio,
-                            &explosion_audio,
-                            &gameover_audio,
-                            boss,
-                            dt,
-                        );
-                        
-                        if boss.is_dead {
-                            let boss_type = boss.boss_type;
-                            current_boss = None;
-                            game.narrative.defeated_bosses.insert(boss_type);
-                            game.narrative.current_chapter += 1;
-                            
-                            if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::BossDefeated(boss_type)) {
-                                game.state = GameState::Dialogue(dialogue.clone());
-                                dialogue_engine.start_dialogue(&dialogue).ok();
-                            }
-                            
-                            if game.narrative.defeated_bosses.len() >= 5 {
-                                if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::AllBossesDefeated) {
-                                    game.state = GameState::Dialogue(dialogue.clone());
-                                    dialogue_engine.start_dialogue(&dialogue).ok();
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    let wave_result = run(
-                        &mut ship,
-                        &mut cannonball_vec,
-                        &mut pirate_vec,
-                        &mut pirate_count,
-                        &mut game_score,
-                        &mut lives,
-                        &background_asset,
-                        &ship_sprite,
-                        &pirate_sprite,
-                        &cannonball_audio,
-                        &explosion_audio,
-                        &explosion_audio,
-                        &gameover_audio,
+                wave_director.update(
+                    dt, 
+                    &mut enemy_vec, 
+                    &mut ship, 
+                    &mut cannonball_vec, 
+                    &mut pirate_vec, 
+                    &mut game_score, 
+                    &mut lives
+                );
+                
+                // Auto-save on wave completion or boss defeated
+                let prev_wave_state = wave_director.wave_state;
+                let wave_complete = wave_director.is_wave_complete();
+                
+                if wave_complete && !matches!(prev_wave_state, WaveState::Complete | WaveState::BossDefeated) {
+                    // Save just before boss or after boss defeat
+                    let save_result = save_game(
+                        game_score,
+                        lives,
+                        wave_director.current_wave,
+                        wave_director.wave_state,
+                        ship.x,
+                        ship.y,
+                        ship.has_shield,
+                        ship.rapid_fire_timer,
+                        ship.spread_shot_timer,
+                        ship.pierce_timer,
+                        game.narrative.clone(),
+                        wave_director.wave_timer,
+                        wave_director.enemies_spawned,
+                        wave_director.powerup_manager.rapid_fire_timer,
+                        wave_director.powerup_manager.spread_shot_timer,
+                        wave_director.powerup_manager.pierce_timer,
+                        wave_director.powerup_manager.has_shield,
                     );
+                    if let Err(e) = save_result {
+                        eprintln!("Auto-save failed: {}", e);
+                    }
+                }
+                
+                wave_director.check_powerup_pickup(
+                    &mut ship, 
+                    &mut cannonball_vec, 
+                    &mut pirate_vec, 
+                    &mut game_score, 
+                    &mut lives
+                );
+                
+                for enemy in &mut enemy_vec {
+                    enemy.update(dt, ship.x, ship.y);
                     
-                    if ship.gameover {
-                        game.state = GameState::GameOver;
-                        play_music("menu_music");
+                    if enemy.can_shoot() {
+                        enemy.reset_shoot_timer();
+                        let (vel_x, vel_y) = enemy.get_shoot_direction(ship.x, ship.y);
+                        let bullet_type = match enemy.shoot_pattern {
+                            crate::enemy::ShootPattern::Straight => crate::bullet::BulletType::EnemyStraight,
+                            crate::enemy::ShootPattern::Aimed => crate::bullet::BulletType::EnemyAimed,
+                            crate::enemy::ShootPattern::Bomb => crate::bullet::BulletType::EnemyBomb,
+                            crate::enemy::ShootPattern::Spread => crate::bullet::BulletType::EnemySpread,
+                            crate::enemy::ShootPattern::None => continue,
+                        };
+                        let bullet = Bullet::new(
+                            bullet_type,
+                            enemy.x,
+                            enemy.y + enemy.height / 2.0,
+                            vel_x * bullet_type.speed(),
+                            vel_y * bullet_type.speed(),
+                        );
+                        bullet_vec.push(bullet);
+                    }
+                }
+                
+                for bullet in &mut bullet_vec {
+                    bullet.update(dt);
+                }
+                bullet_vec.retain(|b| !b.is_dead);
+                
+                for cannonball in &mut cannonball_vec {
+                    cannonball.update();
+                }
+                cannonball_vec.retain(|c| c.y > 0.0);
+                
+                check_collisions(
+                    &mut enemy_vec,
+                    &mut bullet_vec,
+                    &mut cannonball_vec,
+                    &mut ship,
+                    &mut pirate_vec,
+                    &mut pirate_count,
+                    &mut game_score,
+                    &mut lives,
+                    &mut wave_director,
+                );
+                
+                if ship.gameover {
+                    game.state = GameState::GameOver;
+                    play_music("menu_music");
+                }
+                
+                if wave_director.is_wave_complete() && !wave_director.is_boss_active() {
+                    if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::WaveCleared(wave_director.current_wave)) {
+                        game.state = GameState::Dialogue(dialogue.clone());
+                        dialogue_engine.start_dialogue(&dialogue).ok();
                     }
                     
-                    let now = get_time();
-                    if now - last_wave_time > 30.0 && pirate_vec.is_empty() && pirate_count > 0 {
-                        current_wave += 1;
-                        last_wave_time = now;
-                        
-                        if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::WaveCleared(current_wave)) {
+                    if game_score >= CONFIG.bonus_score_threshold {
+                        if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::ScoreThreshold(game_score)) {
                             game.state = GameState::Dialogue(dialogue.clone());
                             dialogue_engine.start_dialogue(&dialogue).ok();
                         }
-                        
-                        if game_score >= CONFIG.bonus_score_threshold {
-                            if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::ScoreThreshold(game_score)) {
-                                game.state = GameState::Dialogue(dialogue.clone());
-                                dialogue_engine.start_dialogue(&dialogue).ok();
-                            }
-                        }
                     }
                 }
                 
-                draw_ui(game_score, lives, current_wave, &game.narrative);
+                // RENDERING
+                draw_texture(&background_asset, 0.0, 0.0, WHITE);
                 
-                if current_boss.is_some() {
-                    draw_boss_health_bar(current_boss.as_ref().unwrap());
+                // Draw cannonballs
+                for cannonball in &cannonball_vec {
+                    cannonball.draw();
                 }
+                
+                // Draw pirates
+                for pirate in &pirate_vec {
+                    pirate.draw(&pirate_sprite);
+                }
+                
+                // Draw enemies
+                for enemy in &enemy_vec {
+                    if let Some(tex) = enemy_sprites.get(enemy.enemy_type.sprite_name()) {
+                        enemy.draw(Some(tex));
+                    } else {
+                        enemy.draw(None);
+                    }
+                }
+                
+                // Draw bullets
+                for bullet in &bullet_vec {
+                    if let Some(tex) = bullet_sprites.get(bullet.bullet_type.sprite_name()) {
+                        bullet.draw(Some(tex));
+                    } else {
+                        bullet.draw(None);
+                    }
+                }
+                
+                // Draw powerups
+                let powerup_textures = std::collections::HashMap::new(); // empty for now
+                wave_director.powerup_manager.draw(&powerup_textures);
+                
+                // Draw boss if active
+                if wave_director.is_boss_active() {
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        boss.draw();
+                    }
+                }
+                
+                // Draw ship
+                ship.draw(&ship_sprite);
+                
+                // Draw UI
+                draw_ui(game_score, lives, wave_director.current_wave, &game.narrative);
+                wave_director.draw_wave_info();
+                
+                if wave_director.is_boss_active() {
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        draw_boss_health_bar(boss);
+                    }
+                }
+                
+                // Draw powerup effect indicators
+                wave_director.powerup_manager.draw_effect_indicators();
             }
             GameState::Dialogue(ref context) => {
                 draw_texture(&background_asset, 0.0, 0.0, WHITE);
@@ -241,8 +402,22 @@ async fn main() {
                 for pirate in &pirate_vec {
                     pirate.draw(&pirate_sprite);
                 }
-                if let Some(boss) = &current_boss {
-                    boss.draw();
+                for enemy in &enemy_vec {
+                    if let Some(tex) = enemy_sprites.get(enemy.enemy_type.sprite_name()) {
+                        enemy.draw(Some(tex));
+                    } else {
+                        enemy.draw(None);
+                    }
+                }
+                for bullet in &bullet_vec {
+                    if let Some(tex) = bullet_sprites.get(bullet.bullet_type.sprite_name()) {
+                        bullet.draw(Some(tex));
+                    } else {
+                        bullet.draw(None);
+                    }
+                }
+                for cannonball in &cannonball_vec {
+                    cannonball.draw();
                 }
                 ship.draw(&ship_sprite);
                 
@@ -255,6 +430,7 @@ async fn main() {
                         DialogueCallback::NextChapter => {
                             game.state = GameState::Playing;
                             game.narrative.current_chapter += 1;
+                            wave_director.start_wave(wave_director.current_wave + 1);
                         }
                         DialogueCallback::GameComplete => {
                             game.state = GameState::Victory;
@@ -264,6 +440,246 @@ async fn main() {
                 }
                 
                 dialogue_engine.draw(&portraits);
+            }
+            GameState::Paused { ref mut selected_item } => {
+                draw_texture(&background_asset, 0.0, 0.0, WHITE);
+                
+                // Draw game in background (frozen)
+                for cannonball in &cannonball_vec {
+                    cannonball.draw();
+                }
+                for pirate in &pirate_vec {
+                    pirate.draw(&pirate_sprite);
+                }
+                for enemy in &enemy_vec {
+                    if let Some(tex) = enemy_sprites.get(enemy.enemy_type.sprite_name()) {
+                        enemy.draw(Some(tex));
+                    } else {
+                        enemy.draw(None);
+                    }
+                }
+                for bullet in &bullet_vec {
+                    if let Some(tex) = bullet_sprites.get(bullet.bullet_type.sprite_name()) {
+                        bullet.draw(Some(tex));
+                    } else {
+                        bullet.draw(None);
+                    }
+                }
+                let powerup_textures = std::collections::HashMap::new();
+                wave_director.powerup_manager.draw(&powerup_textures);
+                if wave_director.is_boss_active() {
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        boss.draw();
+                    }
+                }
+                ship.draw(&ship_sprite);
+                draw_ui(game_score, lives, wave_director.current_wave, &game.narrative);
+                wave_director.draw_wave_info();
+                if wave_director.is_boss_active() {
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        draw_boss_health_bar(boss);
+                    }
+                }
+                wave_director.powerup_manager.draw_effect_indicators();
+                
+                // Draw pause menu on top
+                draw_pause_menu(*selected_item);
+                
+                // Handle pause menu input
+                if is_key_pressed(KeyCode::Up) {
+                    *selected_item = (*selected_item + 4) % 5;
+                }
+                if is_key_pressed(KeyCode::Down) {
+                    *selected_item = (*selected_item + 1) % 5;
+                }
+                if is_key_pressed(KeyCode::Enter) {
+                    match *selected_item {
+                        0 => { // Resume
+                            game.state = GameState::Playing;
+                            show_mouse(false);
+                        }
+                        1 => { // Save Game
+                            let save_result = save_game(
+                                game_score,
+                                lives,
+                                wave_director.current_wave,
+                                wave_director.wave_state,
+                                ship.x,
+                                ship.y,
+                                ship.has_shield,
+                                ship.rapid_fire_timer,
+                                ship.spread_shot_timer,
+                                ship.pierce_timer,
+                                game.narrative.clone(),
+                                wave_director.wave_timer,
+                                wave_director.enemies_spawned,
+                                wave_director.powerup_manager.rapid_fire_timer,
+                                wave_director.powerup_manager.spread_shot_timer,
+                                wave_director.powerup_manager.pierce_timer,
+                                wave_director.powerup_manager.has_shield,
+                            );
+                            if let Err(e) = save_result {
+                                eprintln!("Save failed: {}", e);
+                            } else {
+                                // Could show "Game Saved!" toast here
+                            }
+                        }
+                        2 => { // Console
+                            game.state = GameState::Console { input: String::new(), history: Vec::new(), cursor_pos: 0 };
+                            show_mouse(true);
+                        }
+                        3 => { // Quit to Menu
+                            game.state = GameState::MainMenu;
+                            show_mouse(true);
+                            play_music("menu_music");
+                        }
+                        4 => { // Quit Game
+                            std::process::exit(0);
+                        }
+                        _ => {}
+                    }
+                }
+                if is_key_pressed(KeyCode::Escape) {
+                    game.state = GameState::Playing;
+                    show_mouse(false);
+                }
+            }
+            GameState::Console { input: ref mut _input, history: ref mut _history, cursor_pos: ref mut _cursor_pos } => {
+                // We need to handle console differently to avoid borrow issues
+                // Extract state to local variables, then update back
+                let result: (Option<GameState>, String, Vec<String>, usize) = {
+                    // Use a block to limit the borrow scope
+                    if let GameState::Console { ref mut input, ref mut history, ref mut cursor_pos } = game.state {
+                        // Handle text input
+                        let mut chars_to_add = Vec::new();
+                        while let Some(key) = get_char_pressed() {
+                            if key != '\u{8}' && key != '\u{7f}' {
+                                chars_to_add.push(key);
+                            }
+                        }
+                        
+                        for ch in chars_to_add {
+                            input.insert(*cursor_pos, ch);
+                            *cursor_pos += 1;
+                        }
+                        
+                        // Backspace
+                        if is_key_pressed(KeyCode::Backspace) && *cursor_pos > 0 {
+                            input.remove(*cursor_pos - 1);
+                            *cursor_pos -= 1;
+                        }
+                        
+                        // Cursor movement
+                        if is_key_pressed(KeyCode::Left) && *cursor_pos > 0 {
+                            *cursor_pos -= 1;
+                        }
+                        if is_key_pressed(KeyCode::Right) && *cursor_pos < input.len() {
+                            *cursor_pos += 1;
+                        }
+                        if is_key_pressed(KeyCode::Home) {
+                            *cursor_pos = 0;
+                        }
+                        if is_key_pressed(KeyCode::End) {
+                            *cursor_pos = input.len();
+                        }
+                        
+                        // Execute command on Enter
+                        let new_state = if is_key_pressed(KeyCode::Enter) {
+                            let cmd = input.trim().to_lowercase();
+                            if !cmd.is_empty() {
+                                history.push(format!("> {}", cmd));
+                                let state = execute_console_command(&cmd, &mut ship, &mut wave_director, &mut game_score, &mut lives, &mut enemy_vec, &mut bullet_vec, &mut pirate_vec, &mut cannonball_vec, &mut pirate_count, history);
+                                if let Some(s) = state {
+                                    input.clear();
+                                    *cursor_pos = 0;
+                                    Some(s)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        
+                        // Close console with forward slash
+                        let new_state2 = if is_key_pressed(KeyCode::Slash) {
+                            Some(GameState::Playing)
+                        } else {
+                            None
+                        };
+                        
+                        let final_state = new_state.or(new_state2);
+                        
+                        // Clone values we need for drawing
+                        let input_clone = input.clone();
+                        let history_clone = history.clone();
+                        let cursor_pos_clone = *cursor_pos;
+                        
+                        if let Some(s) = final_state {
+                            if matches!(s, GameState::Playing) {
+                                show_mouse(false);
+                            } else {
+                                show_mouse(true);
+                            }
+                            (Some(s), input_clone, history_clone, cursor_pos_clone)
+                        } else {
+                            (None, input_clone, history_clone, cursor_pos_clone)
+                        }
+                    } else {
+                        (None, String::new(), Vec::new(), 0)
+                    }
+                };
+                
+                let (new_state, input_clone, history_clone, cursor_pos_clone) = result;
+                
+                // Update game state if needed
+                if let Some(state) = new_state {
+                    game.state = state;
+                }
+                
+                // Draw game in background (frozen)
+                draw_texture(&background_asset, 0.0, 0.0, WHITE);
+                for cannonball in &cannonball_vec {
+                    cannonball.draw();
+                }
+                for pirate in &pirate_vec {
+                    pirate.draw(&pirate_sprite);
+                }
+                for enemy in &enemy_vec {
+                    if let Some(tex) = enemy_sprites.get(enemy.enemy_type.sprite_name()) {
+                        enemy.draw(Some(tex));
+                    } else {
+                        enemy.draw(None);
+                    }
+                }
+                for bullet in &bullet_vec {
+                    if let Some(tex) = bullet_sprites.get(bullet.bullet_type.sprite_name()) {
+                        bullet.draw(Some(tex));
+                    } else {
+                        bullet.draw(None);
+                    }
+                }
+                let powerup_textures = std::collections::HashMap::new();
+                wave_director.powerup_manager.draw(&powerup_textures);
+                if wave_director.is_boss_active() {
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        boss.draw();
+                    }
+                }
+                ship.draw(&ship_sprite);
+                draw_ui(game_score, lives, wave_director.current_wave, &game.narrative);
+                wave_director.draw_wave_info();
+                if wave_director.is_boss_active() {
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        draw_boss_health_bar(boss);
+                    }
+                }
+                wave_director.powerup_manager.draw_effect_indicators();
+                
+                // Draw console on top
+                draw_console(&input_clone, &history_clone, cursor_pos_clone);
             }
             GameState::BossIntro(boss_type) => {
                 draw_texture(&background_asset, 0.0, 0.0, WHITE);
@@ -294,7 +710,8 @@ async fn main() {
                 if is_key_pressed(KeyCode::Space) {
                     let mut boss = Boss::new(boss_type);
                     boss.load_assets().await;
-                    current_boss = Some(boss);
+                    wave_director.current_boss = Some(boss);
+                    wave_director.wave_state = wave_director::WaveState::BossFight;
                     game.state = GameState::Playing;
                     play_music("boss_music");
                 }
@@ -308,8 +725,9 @@ async fn main() {
                 
                 if is_key_pressed(KeyCode::Space) {
                     reset_game(&mut ship, &mut cannonball_vec, &mut pirate_vec, 
-                             &mut pirate_count, &mut game_score, &mut lives,
-                             &mut current_wave, &mut current_boss);
+                             &mut enemy_vec, &mut bullet_vec, &mut pirate_count, 
+                             &mut game_score, &mut lives);
+                    wave_director.start_wave(1);
                     game.state = GameState::Playing;
                     play_music("gameplay_music");
                 }
@@ -328,8 +746,9 @@ async fn main() {
                 
                 if is_key_pressed(KeyCode::Space) {
                     reset_game(&mut ship, &mut cannonball_vec, &mut pirate_vec, 
-                             &mut pirate_count, &mut game_score, &mut lives,
-                             &mut current_wave, &mut current_boss);
+                             &mut enemy_vec, &mut bullet_vec, &mut pirate_count, 
+                             &mut game_score, &mut lives);
+                    wave_director.start_wave(1);
                     game.state = GameState::Playing;
                     play_music("gameplay_music");
                 }
@@ -348,22 +767,22 @@ fn reset_game(
     ship: &mut Ship,
     cannonball_vec: &mut Vec<Cannonball>,
     pirate_vec: &mut Vec<Pirate>,
+    enemy_vec: &mut Vec<Enemy>,
+    bullet_vec: &mut Vec<Bullet>,
     pirate_count: &mut i32,
     game_score: &mut i32,
     lives: &mut i32,
-    current_wave: &mut u32,
-    current_boss: &mut Option<Boss>,
 ) {
     ship.x = screen_width() * 0.5 - CONFIG.ship_width * 0.5;
     ship.y = screen_height() - CONFIG.ship_start_y_offset;
     ship.gameover = false;
     cannonball_vec.clear();
     pirate_vec.clear();
+    enemy_vec.clear();
+    bullet_vec.clear();
     *pirate_count = CONFIG.starting_pirate_count;
     *game_score = 0;
     *lives = CONFIG.starting_lives;
-    *current_wave = 0;
-    *current_boss = None;
 }
 
 fn draw_ui(score: i32, lives: i32, wave: u32, narrative: &NarrativeProgress) {
@@ -397,4 +816,302 @@ fn draw_boss_health_bar(boss: &Boss) {
     let phase_text = format!("Phase {:?}", boss.phase);
     let phase_x = screen_width() * 0.5 - measure_text(&phase_text, None, 18, 1.0).width * 0.5;
     draw_text(&phase_text, phase_x, y + bar_height + 20.0, 18.0, YELLOW);
+}
+
+fn execute_console_command(
+    cmd: &str,
+    ship: &mut Ship,
+    wave_director: &mut WaveDirector,
+    game_score: &mut i32,
+    lives: &mut i32,
+    enemy_vec: &mut Vec<Enemy>,
+    bullet_vec: &mut Vec<Bullet>,
+    pirate_vec: &mut Vec<Pirate>,
+    cannonball_vec: &mut Vec<Cannonball>,
+    pirate_count: &mut i32,
+    history: &mut Vec<String>,
+) -> Option<GameState> {
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    if parts.is_empty() {
+        return None;
+    }
+    
+    match parts[0] {
+        "help" => {
+            history.push("Available commands:".to_string());
+            history.push("  help                    - Show this help".to_string());
+            history.push("  god                     - Toggle god mode (invincibility)".to_string());
+            history.push("  heal                    - Full heal ship".to_string());
+            history.push("  wave <n>                - Jump to wave n".to_string());
+            history.push("  score <n>               - Set score to n".to_string());
+            history.push("  lives <n>               - Set lives to n".to_string());
+            history.push("  spawn <enemy_type>      - Spawn enemy (scout, fighter, bomber, interceptor, elite)".to_string());
+            history.push("  killall                 - Kill all enemies".to_string());
+            history.push("  powerup <type>          - Give powerup (rapid, spread, pierce, shield)".to_string());
+            history.push("  fps                     - Toggle FPS display".to_string());
+            history.push("  quit                    - Quit to main menu".to_string());
+        }
+        "god" => {
+            ship.has_shield = !ship.has_shield;
+            if ship.has_shield {
+                history.push("God mode ENABLED".to_string());
+            } else {
+                history.push("God mode DISABLED".to_string());
+            }
+        }
+        "heal" => {
+            ship.has_shield = true;
+            ship.rapid_fire_timer = 30.0;
+            ship.spread_shot_timer = 30.0;
+            ship.pierce_timer = 30.0;
+            history.push("Ship healed and powered up!".to_string());
+        }
+        "wave" => {
+            if parts.len() > 1 {
+                if let Ok(wave_num) = parts[1].parse::<u32>() {
+                    if wave_num >= 1 && wave_num <= 15 {
+                        enemy_vec.clear();
+                        bullet_vec.clear();
+                        cannonball_vec.clear();
+                        pirate_vec.clear();
+                        *pirate_count = CONFIG.starting_pirate_count;
+                        
+                        wave_director.start_wave(wave_num);
+                        *game_score = wave_director.current_wave as i32 * 1000;
+                        history.push(format!("Jumped to wave {}", wave_num));
+                    } else {
+                        history.push("Wave must be 1-15".to_string());
+                    }
+                } else {
+                    history.push("Invalid wave number".to_string());
+                }
+            } else {
+                history.push("Usage: wave <n>".to_string());
+            }
+        }
+        "score" => {
+            if parts.len() > 1 {
+                if let Ok(score) = parts[1].parse::<i32>() {
+                    *game_score = score;
+                    history.push(format!("Score set to {}", score));
+                } else {
+                    history.push("Invalid score".to_string());
+                }
+            } else {
+                history.push("Usage: score <n>".to_string());
+            }
+        }
+        "lives" => {
+            if parts.len() > 1 {
+                if let Ok(l) = parts[1].parse::<i32>() {
+                    *lives = l.clamp(0, 9);
+                    history.push(format!("Lives set to {}", *lives));
+                } else {
+                    history.push("Invalid lives".to_string());
+                }
+            } else {
+                history.push("Usage: lives <n>".to_string());
+            }
+        }
+        "spawn" => {
+            if parts.len() > 1 {
+                use crate::enemy::{Enemy, EnemyType};
+                let enemy_type = match parts[1].to_lowercase().as_str() {
+                    "scout" => EnemyType::Scout,
+                    "fighter" => EnemyType::Fighter,
+                    "bomber" => EnemyType::Bomber,
+                    "interceptor" => EnemyType::Interceptor,
+                    "elite" => EnemyType::Elite,
+                    _ => {
+                        history.push("Unknown enemy type. Use: scout, fighter, bomber, interceptor, elite".to_string());
+                        return None;
+                    }
+                };
+                let x = screen_width() / 2.0;
+                let y = -50.0;
+                let enemy = Enemy::new(enemy_type, x, y, wave_director.current_wave);
+                enemy_vec.push(enemy);
+                history.push(format!("Spawned {:?}", enemy_type));
+            } else {
+                history.push("Usage: spawn <enemy_type>".to_string());
+            }
+        }
+        "killall" => {
+            for enemy in enemy_vec.iter_mut() {
+                enemy.is_dead = true;
+            }
+            for pirate in pirate_vec.iter_mut() {
+                pirate.is_dead = true;
+            }
+            bullet_vec.clear();
+            cannonball_vec.clear();
+            history.push("All enemies killed".to_string());
+        }
+        "powerup" => {
+            if parts.len() > 1 {
+                use crate::ship::PowerupEffectType;
+                let effect = match parts[1].to_lowercase().as_str() {
+                    "rapid" => PowerupEffectType::RapidFire,
+                    "spread" => PowerupEffectType::SpreadShot,
+                    "pierce" => PowerupEffectType::Pierce,
+                    "shield" => PowerupEffectType::Shield,
+                    _ => {
+                        history.push("Unknown powerup. Use: rapid, spread, pierce, shield".to_string());
+                        return None;
+                    }
+                };
+                ship.apply_powerup(effect, 30.0);
+                history.push(format!("Gave powerup: {:?}", effect));
+            } else {
+                history.push("Usage: powerup <type>".to_string());
+            }
+        }
+        "fps" => {
+            history.push("FPS display toggle not implemented yet".to_string());
+        }
+        "quit" => {
+            history.push("Returning to main menu...".to_string());
+            return Some(GameState::MainMenu);
+        }
+        _ => {
+            history.push(format!("Unknown command: {}. Type 'help' for list.", cmd));
+        }
+    }
+    None
+}
+
+fn check_collisions(
+    enemy_vec: &mut Vec<Enemy>,
+    bullet_vec: &mut Vec<Bullet>,
+    cannonball_vec: &mut Vec<Cannonball>,
+    ship: &mut Ship,
+    pirate_vec: &mut Vec<Pirate>,
+    pirate_count: &mut i32,
+    game_score: &mut i32,
+    lives: &mut i32,
+    wave_director: &mut WaveDirector,
+) {
+    let mut rng = ::rand::thread_rng();
+    
+    for cannonball in cannonball_vec.iter_mut() {
+        for enemy in enemy_vec.iter_mut() {
+            if !enemy.is_dead {
+                let (ex, ey, ew, eh) = enemy.get_rect();
+                let (cx, cy, cw, ch) = cannonball.get_rect();
+                if cx < ex + ew && cx + cw > ex && cy < ey + eh && cy + ch > ey {
+                    if enemy.take_damage(cannonball.damage) {
+                        *game_score += enemy.score_value;
+                        wave_director.try_spawn_powerup(enemy);
+                    }
+                    cannonball.y = -100.0;
+                    break;
+                }
+            }
+        }
+        
+        for pirate in pirate_vec.iter_mut() {
+            if !pirate.is_dead {
+                let (px, py, pw, ph) = pirate.get_rect();
+                let (cx, cy, cw, ch) = cannonball.get_rect();
+                if cx < px + pw && cx + cw > px && cy < py + ph && cy + ch > py {
+                    pirate.is_dead = true;
+                    *game_score += 1;
+                    break;
+                }
+            }
+        }
+    }
+    
+    for bullet in bullet_vec.iter_mut() {
+        if bullet.is_dead || bullet.is_laser {
+            continue;
+        }
+        
+        for enemy in enemy_vec.iter_mut() {
+            if !enemy.is_dead {
+                let (ex, ey, ew, eh) = enemy.get_rect();
+                let (bx, by, bw, bh) = bullet.get_rect();
+                if bx < ex + ew && bx + bw > ex && by < ey + eh && by + bh > ey {
+                    if enemy.take_damage(bullet.damage) {
+                        *game_score += enemy.score_value;
+                        wave_director.try_spawn_powerup(enemy);
+                    }
+                    
+                    if !bullet.pierce() {
+                        bullet.is_dead = true;
+                    }
+                    bullet.hit_flash = 0.1;
+                    break;
+                }
+            }
+        }
+        
+        for pirate in pirate_vec.iter_mut() {
+            if !pirate.is_dead {
+                let (px, py, pw, ph) = pirate.get_rect();
+                let (bx, by, bw, bh) = bullet.get_rect();
+                if bx < px + pw && bx + bw > px && by < py + ph && by + bh > py {
+                    pirate.is_dead = true;
+                    *game_score += 1;
+                    if !bullet.pierce() {
+                        bullet.is_dead = true;
+                    }
+                    bullet.hit_flash = 0.1;
+                }
+            }
+        }
+    }
+    
+    for bullet in bullet_vec.iter_mut() {
+        if !bullet.is_dead && bullet.is_laser {
+            for enemy in enemy_vec.iter_mut() {
+                if !enemy.is_dead {
+                    let (ex, ey, ew, eh) = enemy.get_rect();
+                    let (bx, by, bw, bh) = bullet.get_rect();
+                    if bx < ex + ew && bx + bw > ex && by < ey + eh && by + bh > ey {
+                        if enemy.take_damage(bullet.damage) {
+                            *game_score += enemy.score_value;
+                            wave_director.try_spawn_powerup(enemy);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    for bullet in bullet_vec.iter() {
+        if bullet.is_dead {
+            continue;
+        }
+        
+        let (bx, by, bw, bh) = bullet.get_rect();
+        let (sx, sy, sw, sh) = ship.get_rect();
+        
+        if bx < sx + sw && bx + bw > sx && by < sy + sh && by + bh > sy {
+            if ship.has_shield() {
+                ship.consume_shield();
+            } else if *lives > 0 {
+                *lives -= 1;
+            } else {
+                ship.gameover = true;
+            }
+        }
+    }
+    
+    for pirate in pirate_vec.iter() {
+        if !pirate.is_dead {
+            let (px, py, pw, ph) = pirate.get_rect();
+            let (sx, sy, sw, sh) = ship.get_rect();
+            if sx < px + pw && sx + sw > px && sy < py + ph && sy + sh > py {
+                if *lives > 0 {
+                    *lives -= 1;
+                } else {
+                    ship.gameover = true;
+                }
+            }
+        }
+    }
+    
+    enemy_vec.retain(|e| !e.is_dead);
+    pirate_vec.retain(|p| !p.is_dead && p.y < screen_height());
 }
