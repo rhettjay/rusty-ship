@@ -43,15 +43,16 @@ impl AudioManager {
         ];
 
         for (name, path) in music_files {
+            // Silently skip missing/empty files
             if let Ok(bytes) = std::fs::read(path) {
                 if !bytes.is_empty() {
-                    if let Ok(sound) = load_sound_from_bytes(&bytes).await {
+                    let _ = load_sound_from_bytes(&bytes).await.map(|sound| {
                         self.music_tracks.insert(name.to_string(), MusicTrack {
                             name: name.to_string(),
                             sound: Some(sound),
                             playing: false,
                         });
-                    }
+                    });
                 }
             }
         }
@@ -68,11 +69,12 @@ impl AudioManager {
         ];
 
         for (name, path) in sfx_files {
+            // Silently skip missing/empty files
             if let Ok(bytes) = std::fs::read(path) {
                 if !bytes.is_empty() {
-                    if let Ok(sound) = load_sound_from_bytes(&bytes).await {
+                    let _ = load_sound_from_bytes(&bytes).await.map(|sound| {
                         self.sfx.insert(name.to_string(), sound);
-                    }
+                    });
                 }
             }
         }
