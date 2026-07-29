@@ -25,15 +25,18 @@ pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigge
             check_boss_trigger(wave, progress)
         }
         NarrativeTrigger::BossDefeated(boss_type) => {
-            progress.defeated_bosses.insert(boss_type);
+            let boss_str = format!("{:?}", boss_type);
+            if !progress.defeated_bosses.contains(&boss_str) {
+                progress.defeated_bosses.push(boss_str);
+            }
             progress.current_chapter += 1;
             Some(boss_defeat_dialogue(boss_type))
         }
         NarrativeTrigger::ScoreThreshold(score) => {
             if score >= CONFIG.bonus_score_threshold 
-                && !progress.defeated_bosses.contains(&BossType::Deadbeef)
-                && !progress.flags.contains("deadbeef_spawned") {
-                progress.flags.insert("deadbeef_spawned".to_string());
+                && !progress.defeated_bosses.iter().any(|b| b == "Deadbeef")
+                && !progress.flags.contains(&"deadbeef_spawned".to_string()) {
+                progress.flags.push("deadbeef_spawned".to_string());
                 Some(bonus_boss_dialogue())
             } else {
                 None
@@ -52,7 +55,7 @@ pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigge
 fn check_boss_trigger(wave: u32, progress: &NarrativeProgress) -> Option<DialogueContext> {
     let boss_waves = CONFIG.boss_waves.clone();
     if let Some(idx) = boss_waves.iter().position(|&w| w == wave) {
-        if idx < 5 && !progress.defeated_bosses.contains(&BOSS_ORDER[idx]) {
+        if idx < 5 && !progress.defeated_bosses.iter().any(|b| b == &format!("{:?}", BOSS_ORDER[idx])) {
             return Some(boss_intro_dialogue(BOSS_ORDER[idx]));
         }
     }
