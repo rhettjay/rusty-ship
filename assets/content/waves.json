@@ -1,0 +1,211 @@
+{
+  "default": {
+    "duration": 30.0,
+    "max_enemies": 24,
+    "spawn_interval": 1.0,
+    "formations": ["random"],
+    "powerup_chance": 0.0,
+    "enemy_weights": {
+      "scout": 0.3,
+      "fighter": 1.0,
+      "bomber": 1.0,
+      "interceptor": 1.0,
+      "elite": 0.25
+    }
+  },
+  "1": {
+    "duration": 20.0,
+    "max_enemies": 6,
+    "spawn_interval": 2.0,
+    "formations": ["random"],
+    "powerup_chance": 0.08,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 0.5,
+      "bomber": 0.2,
+      "interceptor": 0.1,
+      "elite": 0.0
+    }
+  },
+  "2": {
+    "duration": 25.0,
+    "max_enemies": 8,
+    "spawn_interval": 1.5,
+    "formations": ["random"],
+    "powerup_chance": 0.07,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 0.5,
+      "bomber": 0.2,
+      "interceptor": 0.1,
+      "elite": 0.0
+    }
+  },
+  "3": {
+    "duration": 30.0,
+    "max_enemies": 10,
+    "spawn_interval": 1.8,
+    "formations": [{ "type": "vee", "count": 5, "spacing": 60.0 }],
+    "powerup_chance": 0.06,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 0.8,
+      "bomber": 0.3,
+      "interceptor": 0.1,
+      "elite": 0.0
+    }
+  },
+  "4": {
+    "duration": 30.0,
+    "max_enemies": 12,
+    "spawn_interval": 1.5,
+    "formations": [{ "type": "line", "count": 6, "spacing": 80.0 }],
+    "powerup_chance": 0.06,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 0.8,
+      "bomber": 0.3,
+      "interceptor": 0.1,
+      "elite": 0.0
+    }
+  },
+  "5": {
+    "duration": 0.0,
+    "max_enemies": 0,
+    "spawn_interval": 0.0,
+    "boss": "blowfish"
+  },
+  "6": {
+    "duration": 35.0,
+    "max_enemies": 14,
+    "spawn_interval": 1.2,
+    "formations": [
+      { "type": "line", "count": 5, "spacing": 90.0 },
+      { "type": "vee", "count": 5, "spacing": 60.0 }
+    ],
+    "powerup_chance": 0.05,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 1.0,
+      "bomber": 0.5,
+      "interceptor": 0.4,
+      "elite": 0.0
+    }
+  },
+  "7": {
+    "duration": 35.0,
+    "max_enemies": 16,
+    "spawn_interval": 1.0,
+    "formations": [{ "type": "circle", "count": 8, "radius": 120.0 }],
+    "powerup_chance": 0.05,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 1.0,
+      "bomber": 0.8,
+      "interceptor": 0.6,
+      "elite": 0.05
+    }
+  },
+  "8": {
+    "duration": 40.0,
+    "max_enemies": 14,
+    "spawn_interval": 1.0,
+    "formations": [{ "type": "escort", "leader": "bomber", "followers": 4 }],
+    "powerup_chance": 0.05,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 1.0,
+      "bomber": 0.8,
+      "interceptor": 0.6,
+      "elite": 0.05
+    }
+  },
+  "9": {
+    "duration": 40.0,
+    "max_enemies": 16,
+    "spawn_interval": 0.8,
+    "formations": [{ "type": "vee", "count": 7, "spacing": 55.0 }],
+    "powerup_chance": 0.05,
+    "enemy_weights": {
+      "scout": 1.0,
+      "fighter": 1.0,
+      "bomber": 0.8,
+      "interceptor": 0.6,
+      "elite": 0.05
+    }
+  },
+  "10": {
+    "duration": 0.0,
+    "max_enemies": 0,
+    "spawn_interval": 0.0,
+    "boss": "twofish"
+  },
+  "11": {
+    "duration": 45.0,
+    "max_enemies": 18,
+    "spawn_interval": 0.9,
+    "formations": [
+      { "type": "grid", "rows": 3, "cols": 5, "spacing": 70.0 },
+      { "type": "circle", "count": 8, "radius": 150.0 }
+    ],
+    "powerup_chance": 0.04,
+    "enemy_weights": {
+      "scout": 0.5,
+      "fighter": 1.0,
+      "bomber": 1.0,
+      "interceptor": 0.8,
+      "elite": 0.15
+    }
+  },
+  "12": {
+    "duration": 45.0,
+    "max_enemies": 20,
+    "spawn_interval": 0.7,
+    "formations": [
+      { "type": "circle", "count": 10, "radius": 150.0 },
+      { "type": "grid", "rows": 3, "cols": 6, "spacing": 65.0 }
+    ],
+    "powerup_chance": 0.04,
+    "enemy_weights": {
+      "scout": 0.5,
+      "fighter": 1.0,
+      "bomber": 1.0,
+      "interceptor": 0.8,
+      "elite": 0.15
+    }
+  },
+  "13": {
+    "duration": 50.0,
+    "max_enemies": 22,
+    "spawn_interval": 0.6,
+    "formations": [{ "type": "chaos" }],
+    "powerup_chance": 0.03,
+    "enemy_weights": {
+      "scout": 0.5,
+      "fighter": 1.0,
+      "bomber": 1.0,
+      "interceptor": 0.8,
+      "elite": 0.15
+    }
+  },
+  "14": {
+    "duration": 50.0,
+    "max_enemies": 24,
+    "spawn_interval": 0.5,
+    "formations": [{ "type": "chaos" }],
+    "powerup_chance": 0.03,
+    "enemy_weights": {
+      "scout": 0.5,
+      "fighter": 1.0,
+      "bomber": 1.0,
+      "interceptor": 0.8,
+      "elite": 0.15
+    }
+  },
+  "15": {
+    "duration": 0.0,
+    "max_enemies": 0,
+    "spawn_interval": 0.0,
+    "boss": "captain_davey"
+  }
+}

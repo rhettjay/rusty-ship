@@ -23,6 +23,7 @@ Open with `/` while playing. Type `help` for list.
 | `time <scale>` | Added | Set time scale (0.x slow-mo, 2.x fast) |
 | `state` | Added | Print current game state |
 | `damage <boss> <n>` | Added | Damage current boss by n |
+| `reload` | Added | Reload `assets/content/*.json` from disk + validate |
 
 ## Test Harness
 
@@ -33,3 +34,14 @@ Run with: `cargo test`
 | `collision::tests` | Rect overlap detection (edge cases, containment, no collision) |
 | `boss::tests` | Boss creation, take_damage, phase transitions, invulnerability |
 | `wave_director::tests` | State machine transitions through wave lifecycle |
+| `content::tests` | JSON loading (enemies/waves/bosses), wave fallback, color parsing, validation, reload |
+
+## Content Data
+
+Gameplay balance lives in `assets/content/` as JSON, loaded at startup (no recompile needed):
+
+- `enemies.json` — enemy archetypes (hp, armor, speed, size, shoot pattern, score, powerup chance, color, sprite)
+- `waves.json` — per-wave tables (`default` = endless mode): duration, max enemies, spawn interval, formations, enemy weights, optional `boss` key (waves 5, 10, 15)
+- `bosses.json` — boss definitions: health, size, sprites, movement kind, and health-threshold phases with attack lists
+
+Use the in-game console command `reload` to re-read these files while playing. If a file fails to parse, the game keeps the last good content and prints the error.

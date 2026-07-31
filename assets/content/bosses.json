@@ -1,0 +1,202 @@
+{
+  "blowfish": {
+    "name": "Blowfish",
+    "max_health": 150,
+    "size": [80.0, 80.0],
+    "sprite": "blowfish",
+    "portrait": "blowfish",
+    "movement": { "kind": "patrol", "speed_x": 2.0, "base_y": 50.0, "amp_y": 30.0, "freq_y": 0.5 },
+    "phases": [
+      {
+        "health_threshold": 1.0,
+        "attack_interval": 2.5,
+        "attacks": [
+          { "kind": "burst", "count": 8, "speed": 4.0, "bullet": { "size": 12.0, "damage": 1, "color": "orange", "lifetime": 5.0 } }
+        ]
+      },
+      {
+        "health_threshold": 0.5,
+        "attack_interval": 1.8,
+        "attacks": [
+          { "kind": "burst", "count": 16, "speed": 4.0, "bullet": { "size": 12.0, "damage": 1, "color": "orange", "lifetime": 5.0 } },
+          { "kind": "charge", "speed": 8.0, "invuln": 1.0, "chance": 0.5 }
+        ]
+      },
+      {
+        "health_threshold": 0.2,
+        "attack_interval": 1.2,
+        "attacks": [
+          { "kind": "burst", "count": 24, "speed": 4.0, "bullet": { "size": 12.0, "damage": 1, "color": "orange", "lifetime": 5.0 } },
+          { "kind": "charge", "speed": 8.0, "invuln": 1.0 }
+        ]
+      }
+    ]
+  },
+  "twofish": {
+    "name": "Twofish",
+    "max_health": 200,
+    "size": [80.0, 80.0],
+    "sprite": "twofish",
+    "portrait": "twofish",
+    "movement": { "kind": "patrol", "speed_x": 2.0, "base_y": 50.0, "amp_y": 40.0, "freq_y": 0.7 },
+    "phases": [
+      {
+        "health_threshold": 1.0,
+        "attack_interval": 2.0,
+        "attacks": [
+          { "kind": "aimed", "count": 2, "speed": 5.0, "mirror": true, "bullet": { "size": 14.0, "damage": 1, "color": "blue", "lifetime": 4.0 } }
+        ]
+      },
+      {
+        "health_threshold": 0.5,
+        "attack_interval": 1.5,
+        "attacks": [
+          { "kind": "ring", "count": 4, "speed": 4.0, "bullet": { "size": 16.0, "damage": 1, "color": "purple", "lifetime": 5.0, "pattern": "spiral" } }
+        ]
+      },
+      {
+        "health_threshold": 0.2,
+        "attack_interval": 1.0,
+        "attacks": [
+          { "kind": "aimed", "count": 2, "speed": 5.0, "mirror": true, "bullet": { "size": 14.0, "damage": 1, "color": "blue", "lifetime": 4.0 } },
+          { "kind": "homing", "count": 4, "bullet": { "size": 10.0, "damage": 1, "color": "yellow", "lifetime": 6.0, "pattern": "homing" } }
+        ]
+      }
+    ]
+  },
+  "rufus_reverse": {
+    "name": "Rufus Reverse",
+    "max_health": 180,
+    "size": [80.0, 80.0],
+    "sprite": "rufus_reverse",
+    "portrait": "rufus_reverse",
+    "movement": { "kind": "teleport", "cooldown": 3.0 },
+    "phases": [
+      {
+        "health_threshold": 1.0,
+        "attack_interval": 3.0,
+        "attacks": [
+          { "kind": "reverse_zone", "duration": 5.0 },
+          { "kind": "scatter", "count": 8, "speed": 4.0, "spread": 1.5708, "bullet": { "size": 10.0, "damage": 1, "color": "pink", "lifetime": 4.0 } }
+        ]
+      },
+      {
+        "health_threshold": 0.5,
+        "attack_interval": 2.0,
+        "attacks": [
+          { "kind": "reverse_zone", "duration": 5.0 },
+          { "kind": "aimed", "count": 2, "speed": 5.0, "mirror": true, "bullet": { "size": 14.0, "damage": 1, "color": "blue", "lifetime": 4.0 } }
+        ]
+      },
+      {
+        "health_threshold": 0.2,
+        "attack_interval": 1.5,
+        "attacks": [
+          { "kind": "reverse_zone", "duration": 10.0 },
+          { "kind": "scatter", "count": 8, "speed": 4.0, "spread": 1.5708, "bullet": { "size": 10.0, "damage": 1, "color": "pink", "lifetime": 4.0 } },
+          { "kind": "homing", "count": 3, "bullet": { "size": 10.0, "damage": 1, "color": "yellow", "lifetime": 6.0, "pattern": "homing" } }
+        ]
+      }
+    ]
+  },
+  "molly_hashpass": {
+    "name": "Molly Hashpass",
+    "max_health": 220,
+    "size": [80.0, 80.0],
+    "sprite": "molly_hashpass",
+    "portrait": "molly_hashpass",
+    "movement": { "kind": "patrol", "speed_x": 2.0, "base_y": 60.0, "amp_y": 20.0, "freq_y": 0.4 },
+    "phases": [
+      {
+        "health_threshold": 1.0,
+        "attack_interval": 2.5,
+        "attacks": [
+          { "kind": "aimed", "count": 3, "speed": 4.0, "spread": 0.4, "bullet": { "size": 12.0, "damage": 1, "color": "green", "lifetime": 4.0 } },
+          { "kind": "heal", "amount": 5 }
+        ]
+      },
+      {
+        "health_threshold": 0.5,
+        "attack_interval": 2.0,
+        "attacks": [
+          { "kind": "poison_cloud", "count": 3, "bullet": { "size": 40.0, "damage": 1, "color": "rgba(0.0, 0.8, 0.0, 0.5)", "lifetime": 3.0 } },
+          { "kind": "revive_minions" }
+        ]
+      },
+      {
+        "health_threshold": 0.2,
+        "attack_interval": 1.5,
+        "attacks": [
+          { "kind": "heal_beam", "amount": 30, "invuln": 3.0 },
+          { "kind": "aimed", "count": 3, "speed": 4.0, "spread": 0.4, "bullet": { "size": 12.0, "damage": 1, "color": "green", "lifetime": 4.0 } },
+          { "kind": "poison_cloud", "count": 3, "bullet": { "size": 40.0, "damage": 1, "color": "rgba(0.0, 0.8, 0.0, 0.5)", "lifetime": 3.0 } }
+        ]
+      }
+    ]
+  },
+  "captain_davey": {
+    "name": "Captain Davey Portscan",
+    "max_health": 500,
+    "size": [120.0, 120.0],
+    "sprite": "captain_davey",
+    "portrait": "captain_davey_portscan",
+    "movement": { "kind": "centered_sway", "amp_x": 100.0, "freq_x": 0.3, "base_y": 50.0, "amp_y": 30.0, "freq_y": 0.5 },
+    "phases": [
+      {
+        "health_threshold": 1.0,
+        "attack_interval": 3.0,
+        "attacks": [
+          { "kind": "beam" }
+        ]
+      },
+      {
+        "health_threshold": 0.5,
+        "attack_interval": 2.5,
+        "attacks": [
+          { "kind": "beam" },
+          { "kind": "spawn_minions" }
+        ]
+      },
+      {
+        "health_threshold": 0.2,
+        "attack_interval": 2.0,
+        "attacks": [
+          { "kind": "wall", "rows": 5, "cols": 20, "speed": 8.0, "gap": 5, "bullet": { "size": 16.0, "damage": 1, "color": "orange", "lifetime": 8.0 } },
+          { "kind": "beam" }
+        ]
+      }
+    ]
+  },
+  "deadbeef": {
+    "name": "Deadbeef",
+    "max_health": 300,
+    "size": [80.0, 80.0],
+    "sprite": "deadbeef",
+    "portrait": "deadbeef",
+    "movement": { "kind": "patrol", "speed_x": 3.0, "base_y": 80.0, "amp_y": 50.0, "freq_y": 0.8 },
+    "phases": [
+      {
+        "health_threshold": 1.0,
+        "attack_interval": 1.5,
+        "attacks": [
+          { "kind": "throw_food" }
+        ]
+      },
+      {
+        "health_threshold": 0.5,
+        "attack_interval": 1.2,
+        "attacks": [
+          { "kind": "throw_food" },
+          { "kind": "ring", "count": 8, "speed": 4.0, "bullet": { "size": 8.0, "damage": 1, "color": "red", "lifetime": 4.0 } }
+        ]
+      },
+      {
+        "health_threshold": 0.2,
+        "attack_interval": 0.8,
+        "attacks": [
+          { "kind": "feast", "count": 30 }
+        ]
+      }
+    ]
+  }
+}

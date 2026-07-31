@@ -2,6 +2,7 @@ use macroquad::prelude::*;
 
 mod config;
 mod collision;
+mod content;
 mod pirate;
 mod ship;
 mod cannonball;
@@ -38,6 +39,11 @@ use std::collections::HashMap;
 #[macroquad::main("rusty-ship")]
 async fn main() {
     show_mouse(false);
+    
+    content::load();
+    if let Err(issues) = content::validate() {
+        eprintln!("[content] validation issues:\n{issues}");
+    }
     
     let _audio_manager = init_audio().await;
     set_music_volume(CONFIG.music_volume);
@@ -898,6 +904,7 @@ fn execute_console_command(
             history.push("  time <scale>            - Set time scale (0.x slow, 2.x fast)".to_string());
             history.push("  state                   - Print current game state".to_string());
             history.push("  damage <boss> <n>       - Damage current boss by n".to_string());
+            history.push("  reload                  - Reload content JSON from disk".to_string());
             history.push("  fps                     - Toggle FPS display".to_string());
             history.push("  quit                    - Quit to main menu".to_string());
         }
@@ -1117,6 +1124,30 @@ fn execute_console_command(
         "fps" => {
             history.push("FPS display toggle not implemented yet".to_string());
         }
+        "reload" => {
+            match content::reload() {
+                Ok(()) => {
+                    history.push("Content reloaded from assets/content/".to_string());
+                    if let Err(issues) = content::validate() {
+                        history.push("[content] validation issues:".to_string());
+                        for line in issues.lines() {
+                            history.push(format!("  {line}"));
+                        }
+                    }
+                    for key in ["scout", "fighter", "bomber", "interceptor", "elite"] {
+                        if content::enemy(key).is_none() {
+                            history.push(format!("WARNING: no archetype for enemy \"{key}\""));
+                        }
+                    }
+                    for boss_key in content::load().bosses.keys() {
+                        if BossType::from_key(boss_key).is_none() {
+                            history.push(format!("WARNING: unknown boss key \"{boss_key}\""));
+                        }
+                    }
+                }
+                Err(err) => history.push(format!("Reload failed: {err}")),
+            }
+        }
         "quit" => {
             history.push("Returning to main menu...".to_string());
             return Some(GameState::MainMenu);
@@ -1267,10 +1298,7 @@ fn check_collisions(
 }
 
 fn boss_for_wave(wave: u32) -> BossType {
-    match wave {
-        5 => BossType::Blowfish,
-        10 => BossType::Twofish,
-        15 => BossType::CaptainDavey,
-        _ => BossType::Blowfish,
-    }
+    crate::content::boss_for_wave(wave)
+        .and_then(BossType::from_key)
+        .unwrap_or(BossType::Blowfish)
 }

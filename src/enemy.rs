@@ -1,5 +1,5 @@
 use macroquad::prelude::*;
-use crate::config::{ENEMY_CONFIG, WAVE_CONFIG};
+use crate::content;
 use ::rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -12,103 +12,39 @@ pub enum EnemyType {
 }
 
 impl EnemyType {
-    pub fn base_hp(&self) -> i32 {
-        match self {
-            EnemyType::Scout => 1,
-            EnemyType::Fighter => 2,
-            EnemyType::Bomber => 3,
-            EnemyType::Interceptor => 2,
-            EnemyType::Elite => 4,
-        }
-    }
-
-    pub fn base_armor(&self) -> i32 {
-        match self {
-            EnemyType::Scout => 0,
-            EnemyType::Fighter => 0,
-            EnemyType::Bomber => 1,
-            EnemyType::Interceptor => 0,
-            EnemyType::Elite => 2,
-        }
-    }
-
-    pub fn speed_range(&self) -> (f32, f32) {
-        match self {
-            EnemyType::Scout => (3.0, 5.0),
-            EnemyType::Fighter => (1.5, 3.0),
-            EnemyType::Bomber => (0.8, 1.5),
-            EnemyType::Interceptor => (2.5, 4.0),
-            EnemyType::Elite => (2.0, 3.5),
-        }
-    }
-
-    pub fn size(&self) -> (f32, f32) {
-        match self {
-            EnemyType::Scout => (24.0, 24.0),
-            EnemyType::Fighter => (32.0, 32.0),
-            EnemyType::Bomber => (40.0, 40.0),
-            EnemyType::Interceptor => (28.0, 28.0),
-            EnemyType::Elite => (32.0, 32.0),
-        }
-    }
-
-    pub fn shoot_pattern(&self) -> ShootPattern {
-        match self {
-            EnemyType::Scout => ShootPattern::None,
-            EnemyType::Fighter => ShootPattern::Straight,
-            EnemyType::Bomber => ShootPattern::Bomb,
-            EnemyType::Interceptor => ShootPattern::Aimed,
-            EnemyType::Elite => ShootPattern::Spread,
-        }
-    }
-
-    pub fn shoot_interval(&self) -> f64 {
-        match self {
-            EnemyType::Scout => 0.0,
-            EnemyType::Fighter => 2.0,
-            EnemyType::Bomber => 3.0,
-            EnemyType::Interceptor => 1.5,
-            EnemyType::Elite => 1.2,
-        }
-    }
-
-    pub fn score_value(&self) -> i32 {
-        match self {
-            EnemyType::Scout => 10,
-            EnemyType::Fighter => 25,
-            EnemyType::Bomber => 50,
-            EnemyType::Interceptor => 40,
-            EnemyType::Elite => 100,
-        }
-    }
-
-    pub fn powerup_chance(&self) -> f32 {
-        match self {
-            EnemyType::Scout => 0.03,
-            EnemyType::Fighter => 0.05,
-            EnemyType::Bomber => 0.10,
-            EnemyType::Interceptor => 0.07,
-            EnemyType::Elite => 0.25,
-        }
-    }
-
-    pub fn sprite_name(&self) -> &'static str {
+    pub fn key(&self) -> &'static str {
         match self {
             EnemyType::Scout => "scout",
             EnemyType::Fighter => "fighter",
             EnemyType::Bomber => "bomber",
             EnemyType::Interceptor => "interceptor",
-            EnemyType::Elite => "fighter",
+            EnemyType::Elite => "elite",
         }
     }
 
-    pub fn color(&self) -> Color {
-        match self {
-            EnemyType::Scout => LIGHTGRAY,
-            EnemyType::Fighter => WHITE,
-            EnemyType::Bomber => ORANGE,
-            EnemyType::Interceptor => SKYBLUE,
-            EnemyType::Elite => GOLD,
+    pub fn from_key(key: &str) -> Option<EnemyType> {
+        match key {
+            "scout" => Some(EnemyType::Scout),
+            "fighter" => Some(EnemyType::Fighter),
+            "bomber" => Some(EnemyType::Bomber),
+            "interceptor" => Some(EnemyType::Interceptor),
+            "elite" => Some(EnemyType::Elite),
+            _ => None,
+        }
+    }
+
+    pub fn archetype(&self) -> &'static content::EnemyArchetype {
+        content::enemy(self.key()).unwrap_or_else(|| panic!("missing enemy archetype: {}", self.key()))
+    }
+
+    pub fn sprite_name(&self) -> &'static str {
+        let sprite = &self.archetype().sprite;
+        match sprite.as_str() {
+            "scout" => "scout",
+            "fighter" => "fighter",
+            "bomber" => "bomber",
+            "interceptor" => "interceptor",
+            _ => "fighter",
         }
     }
 
@@ -124,6 +60,18 @@ pub enum ShootPattern {
     Aimed,
     Bomb,
     Spread,
+}
+
+impl ShootPattern {
+    pub fn from_key(key: &str) -> ShootPattern {
+        match key {
+            "straight" => ShootPattern::Straight,
+            "aimed" => ShootPattern::Aimed,
+            "bomb" => ShootPattern::Bomb,
+            "spread" => ShootPattern::Spread,
+            _ => ShootPattern::None,
+        }
+    }
 }
 
 pub struct Enemy {
@@ -163,15 +111,16 @@ pub enum BehaviorState {
 
 impl Enemy {
     pub fn new(enemy_type: EnemyType, x: f32, y: f32, wave: u32) -> Self {
-        let base_hp = enemy_type.base_hp();
-        let base_armor = enemy_type.base_armor();
+        let arch = enemy_type.archetype();
+        let base_hp = arch.base_hp;
+        let base_armor = arch.base_armor;
         let hp_scaling = wave / 3;
         let armor_scaling = wave / 5;
 
         let hp = base_hp + hp_scaling as i32;
         let armor = base_armor + armor_scaling as i32;
-        let (width, height) = enemy_type.size();
-        let (min_speed, max_speed) = enemy_type.speed_range();
+        let (width, height) = arch.size;
+        let (min_speed, max_speed) = arch.speed_range;
         let mut rng = ::rand::thread_rng();
         let speed_x = rng.gen_range(min_speed..max_speed) * if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
         let speed_y = rng.gen_range(0.5..1.5);
@@ -185,13 +134,13 @@ impl Enemy {
             y,
             speed_x,
             speed_y,
-            color: enemy_type.color(),
+            color: content::parse_color(&arch.color),
             is_dead: false,
             shoot_timer: 0.0,
-            shoot_pattern: enemy_type.shoot_pattern(),
-            shoot_interval: enemy_type.shoot_interval(),
-            score_value: enemy_type.score_value(),
-            powerup_chance: enemy_type.powerup_chance(),
+            shoot_pattern: ShootPattern::from_key(&arch.shoot_pattern),
+            shoot_interval: arch.shoot_interval,
+            score_value: arch.score_value,
+            powerup_chance: arch.powerup_chance,
             width,
             height,
             is_elite: enemy_type.is_elite(),
@@ -424,48 +373,34 @@ impl Enemy {
 }
 
 pub fn get_spawn_weights(wave: u32) -> Vec<(EnemyType, f32)> {
-    let mut weights = vec![
-        (EnemyType::Scout, 1.0),
-        (EnemyType::Fighter, 0.5),
-        (EnemyType::Bomber, 0.2),
-        (EnemyType::Interceptor, 0.1),
-        (EnemyType::Elite, 0.0),
-    ];
+    let def = content::wave(wave);
 
-    match wave {
-        1..=2 => {}
-        3..=4 => {
-            weights[1].1 = 0.8;
-            weights[2].1 = 0.3;
-        }
-        5..=6 => {
-            weights[1].1 = 1.0;
-            weights[2].1 = 0.5;
-            weights[3].1 = 0.4;
-        }
-        7..=9 => {
-            weights[1].1 = 1.0;
-            weights[2].1 = 0.8;
-            weights[3].1 = 0.6;
-            weights[4].1 = 0.05;
-        }
-        10..=14 => {
-            weights[0].1 = 0.5;
-            weights[1].1 = 1.0;
-            weights[2].1 = 1.0;
-            weights[3].1 = 0.8;
-            weights[4].1 = 0.15;
-        }
-        _ => {
-            weights[0].1 = 0.3;
-            weights[1].1 = 1.0;
-            weights[2].1 = 1.0;
-            weights[3].1 = 1.0;
-            weights[4].1 = 0.25;
-        }
+    if def.enemy_weights.is_empty() {
+        return default_spawn_weights();
     }
 
+    let mut weights: Vec<(EnemyType, f32)> = def
+        .enemy_weights
+        .iter()
+        .filter_map(|(key, weight)| EnemyType::from_key(key).map(|et| (et, *weight)))
+        .collect();
+
+    if weights.is_empty() {
+        weights = default_spawn_weights();
+    }
+
+    weights.sort_by_key(|(et, _)| *et as u8);
     weights
+}
+
+fn default_spawn_weights() -> Vec<(EnemyType, f32)> {
+    vec![
+        (EnemyType::Scout, 0.3),
+        (EnemyType::Fighter, 1.0),
+        (EnemyType::Bomber, 1.0),
+        (EnemyType::Interceptor, 1.0),
+        (EnemyType::Elite, 0.25),
+    ]
 }
 
 pub fn select_enemy_type(wave: u32, rng: &mut impl Rng) -> EnemyType {

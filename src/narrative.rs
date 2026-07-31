@@ -52,10 +52,11 @@ pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigge
 }
 
 fn check_boss_trigger(wave: u32, progress: &NarrativeProgress) -> Option<DialogueContext> {
-    let boss_waves = CONFIG.boss_waves.clone();
-    if let Some(idx) = boss_waves.iter().position(|&w| w == wave) {
-        if idx < 5 && !progress.defeated_bosses.iter().any(|b| b == &format!("{:?}", BOSS_ORDER[idx])) {
-            return Some(boss_intro_dialogue(BOSS_ORDER[idx]));
+    if let Some(boss) = crate::content::boss_for_wave(wave).and_then(BossType::from_key) {
+        if let Some(idx) = BOSS_ORDER.iter().position(|&b| b == boss) {
+            if idx < 5 && !progress.defeated_bosses.iter().any(|b| b == &format!("{:?}", BOSS_ORDER[idx])) {
+                return Some(boss_intro_dialogue(BOSS_ORDER[idx]));
+            }
         }
     }
     None

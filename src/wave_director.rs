@@ -1,9 +1,7 @@
 use macroquad::prelude::*;
 use crate::enemy::{Enemy, select_enemy_type};
-use crate::formation::{get_wave_formations, get_wave_duration, get_spawn_interval_for_wave};
-use crate::powerup::{PowerUpManager, PowerupEffect};
-use crate::config::PowerupType;
-use crate::boss::{Boss, BossType};
+use crate::powerup::PowerUpManager;
+use crate::boss::Boss;
 use crate::bullet::Bullet;
 use ::rand::Rng;
 use serde::{Serialize, Deserialize};
@@ -52,29 +50,22 @@ impl WaveDirector {
     }
 
     pub fn start_wave(&mut self, wave: u32) {
+        let def = crate::content::wave(wave);
         self.current_wave = wave;
-        self.is_boss_wave = matches!(wave, 5 | 10 | 15);
+        self.is_boss_wave = def.boss.is_some();
         self.wave_state = if self.is_boss_wave { WaveState::BossIntro } else { WaveState::Spawning };
         self.wave_timer = 0.0;
-        self.wave_duration = get_wave_duration(wave);
+        self.wave_duration = def.duration;
         self.spawn_timer = 0.0;
-        self.spawn_interval = get_spawn_interval_for_wave(wave);
-        self.max_enemies = self.get_max_enemies_for_wave(wave);
+        self.spawn_interval = def.spawn_interval;
+        self.max_enemies = def.max_enemies;
         self.enemies_spawned = 0;
         self.powerup_manager.powerups.clear();
         self.current_boss = None;
     }
 
     pub fn get_max_enemies_for_wave(&self, wave: u32) -> u32 {
-        match wave {
-            1 => 6, 2 => 8, 3 => 10, 4 => 12,
-            5 => 0,
-            6 => 14, 7 => 16, 8 => 14, 9 => 16,
-            10 => 0,
-            11 => 18, 12 => 20, 13 => 22, 14 => 24,
-            15 => 0,
-            _ => 24,
-        }
+        crate::content::wave(wave).max_enemies
     }
 
     pub fn update(&mut self, dt: f64, enemy_vec: &mut Vec<Enemy>, bullet_vec: &mut Vec<Bullet>, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {

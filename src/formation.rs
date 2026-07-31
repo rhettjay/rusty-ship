@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
-use macroquad::rand::ChooseRandom;
+use crate::content::{self, FormationSpec, DetailedFormation};
 use crate::enemy::{Enemy, EnemyType, BehaviorState};
+use ::rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FormationType {
@@ -14,6 +15,31 @@ pub enum FormationType {
 }
 
 impl FormationType {
+    pub fn from_spec(spec: &FormationSpec) -> FormationType {
+        match spec {
+            FormationSpec::Simple(name) => match name.as_str() {
+                "vee" => FormationType::Vee { count: 5, spacing: 60.0 },
+                "line" => FormationType::Line { count: 6, spacing: 80.0 },
+                "circle" => FormationType::Circle { count: 8, radius: 120.0 },
+                "escort" => FormationType::Escort { leader_type: EnemyType::Bomber, follower_count: 4 },
+                "grid" => FormationType::Grid { rows: 3, cols: 5, spacing: 70.0 },
+                "chaos" => FormationType::Chaos,
+                _ => FormationType::Random,
+            },
+            FormationSpec::Detailed(d) => match d {
+                DetailedFormation::Vee { count, spacing } => FormationType::Vee { count: *count, spacing: *spacing },
+                DetailedFormation::Line { count, spacing } => FormationType::Line { count: *count, spacing: *spacing },
+                DetailedFormation::Circle { count, radius } => FormationType::Circle { count: *count, radius: *radius },
+                DetailedFormation::Escort { leader, followers } => FormationType::Escort {
+                    leader_type: EnemyType::from_key(leader).unwrap_or(EnemyType::Bomber),
+                    follower_count: *followers,
+                },
+                DetailedFormation::Grid { rows, cols, spacing } => FormationType::Grid { rows: *rows, cols: *cols, spacing: *spacing },
+                DetailedFormation::Chaos => FormationType::Chaos,
+            },
+        }
+    }
+
     pub fn default_params(&self) -> Self {
         match self {
             FormationType::Random => FormationType::Random,
@@ -152,44 +178,20 @@ impl FormationType {
 }
 
 pub fn create_random_formation(wave: u32) -> FormationType {
-    let formations = match wave {
-        1..=2 => vec![FormationType::Random],
-        3..=4 => vec![FormationType::Vee { count: 5, spacing: 60.0 }, FormationType::Line { count: 6, spacing: 80.0 }, FormationType::Random],
-        6..=9 => vec![
-            FormationType::Vee { count: 5, spacing: 60.0 },
-            FormationType::Line { count: 6, spacing: 80.0 },
-            FormationType::Circle { count: 8, radius: 120.0 },
-            FormationType::Escort { leader_type: EnemyType::Bomber, follower_count: 4 },
-            FormationType::Random,
-        ],
-        11..=14 => vec![
-            FormationType::Grid { rows: 3, cols: 5, spacing: 70.0 },
-            FormationType::Circle { count: 10, radius: 150.0 },
-            FormationType::Vee { count: 7, spacing: 55.0 },
-            FormationType::Line { count: 8, spacing: 70.0 },
-            FormationType::Chaos,
-        ],
-        _ => vec![FormationType::Chaos],
-    };
-
-    *formations.choose().unwrap()
+    let formations = get_wave_formations(wave);
+    if formations.is_empty() {
+        return FormationType::Random;
+    }
+    let mut rng = ::rand::thread_rng();
+    formations[rng.gen_range(0..formations.len())]
 }
 
 pub fn get_wave_formations(wave: u32) -> Vec<FormationType> {
-    match wave {
-        1..=2 => vec![FormationType::Random],
-        3 => vec![FormationType::Vee { count: 5, spacing: 60.0 }],
-        4 => vec![FormationType::Line { count: 6, spacing: 80.0 }],
-        6 => vec![FormationType::Line { count: 5, spacing: 90.0 }, FormationType::Vee { count: 5, spacing: 60.0 }],
-        7 => vec![FormationType::Circle { count: 8, radius: 120.0 }],
-        8 => vec![FormationType::Escort { leader_type: EnemyType::Bomber, follower_count: 4 }],
-        9 => vec![FormationType::Vee { count: 7, spacing: 55.0 }],
-        11 => vec![FormationType::Grid { rows: 3, cols: 5, spacing: 70.0 }, FormationType::Circle { count: 8, radius: 150.0 }],
-        12 => vec![FormationType::Circle { count: 10, radius: 150.0 }, FormationType::Grid { rows: 3, cols: 6, spacing: 65.0 }],
-        13 => vec![FormationType::Chaos],
-        14 => vec![FormationType::Chaos],
-        _ => vec![FormationType::Random],
-    }
+    content::wave(wave)
+        .formations
+        .iter()
+        .map(FormationType::from_spec)
+        .collect()
 }
 
 pub struct FormationManager {
@@ -247,41 +249,5 @@ impl FormationManager {
             return true;
         }
         false
-    }
-}
-
-pub fn get_wave_duration(wave: u32) -> f32 {
-    match wave {
-        1 => 20.0,
-        2 => 25.0,
-        3 => 30.0,
-        4 => 30.0,
-        6 => 35.0,
-        7 => 35.0,
-        8 => 40.0,
-        9 => 40.0,
-        11 => 45.0,
-        12 => 45.0,
-        13 => 50.0,
-        14 => 50.0,
-        _ => 30.0,
-    }
-}
-
-pub fn get_spawn_interval_for_wave(wave: u32) -> f32 {
-    match wave {
-        1 => 2.0,
-        2 => 1.5,
-        3 => 1.8,
-        4 => 1.5,
-        6 => 1.2,
-        7 => 1.0,
-        8 => 1.0,
-        9 => 0.8,
-        11 => 0.9,
-        12 => 0.7,
-        13 => 0.6,
-        14 => 0.5,
-        _ => 1.0,
     }
 }

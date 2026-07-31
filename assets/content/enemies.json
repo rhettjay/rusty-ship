@@ -1,0 +1,62 @@
+{
+  "scout": {
+    "base_hp": 1,
+    "base_armor": 0,
+    "speed_range": [3.0, 5.0],
+    "size": [24.0, 24.0],
+    "shoot_pattern": "none",
+    "shoot_interval": 0.0,
+    "score_value": 10,
+    "powerup_chance": 0.03,
+    "color": "lightgray",
+    "sprite": "scout"
+  },
+  "fighter": {
+    "base_hp": 2,
+    "base_armor": 0,
+    "speed_range": [1.5, 3.0],
+    "size": [32.0, 32.0],
+    "shoot_pattern": "straight",
+    "shoot_interval": 2.0,
+    "score_value": 25,
+    "powerup_chance": 0.05,
+    "color": "white",
+    "sprite": "fighter"
+  },
+  "bomber": {
+    "base_hp": 3,
+    "base_armor": 1,
+    "speed_range": [0.8, 1.5],
+    "size": [40.0, 40.0],
+    "shoot_pattern": "bomb",
+    "shoot_interval": 3.0,
+    "score_value": 50,
+    "powerup_chance": 0.10,
+    "color": "orange",
+    "sprite": "bomber"
+  },
+  "interceptor": {
+    "base_hp": 2,
+    "base_armor": 0,
+    "speed_range": [2.5, 4.0],
+    "size": [28.0, 28.0],
+    "shoot_pattern": "aimed",
+    "shoot_interval": 1.5,
+    "score_value": 40,
+    "powerup_chance": 0.07,
+    "color": "skyblue",
+    "sprite": "interceptor"
+  },
+  "elite": {
+    "base_hp": 4,
+    "base_armor": 2,
+    "speed_range": [2.0, 3.5],
+    "size": [32.0, 32.0],
+    "shoot_pattern": "spread",
+    "shoot_interval": 1.2,
+    "score_value": 100,
+    "powerup_chance": 0.25,
+    "color": "gold",
+    "sprite": "fighter"
+  }
+}
