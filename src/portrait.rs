@@ -62,7 +62,7 @@ impl PortraitManager {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize, Default)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "PascalCase")]
 pub enum Character {
     #[default]
     CaptainDavey,
