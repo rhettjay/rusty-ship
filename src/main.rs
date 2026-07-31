@@ -608,13 +608,15 @@ async fn main() {
                         }
                         
                         for ch in chars_to_add {
-                            input.insert(*cursor_pos, ch);
+                            let byte_idx = menu::char_to_byte(input, *cursor_pos);
+                            input.insert(byte_idx, ch);
                             *cursor_pos += 1;
                         }
                         
                         // Backspace
                         if is_key_pressed(KeyCode::Backspace) && *cursor_pos > 0 {
-                            input.remove(*cursor_pos - 1);
+                            let byte_idx = menu::char_to_byte(input, *cursor_pos - 1);
+                            input.remove(byte_idx);
                             *cursor_pos -= 1;
                         }
                         
@@ -622,14 +624,14 @@ async fn main() {
                         if is_key_pressed(KeyCode::Left) && *cursor_pos > 0 {
                             *cursor_pos -= 1;
                         }
-                        if is_key_pressed(KeyCode::Right) && *cursor_pos < input.len() {
+                        if is_key_pressed(KeyCode::Right) && *cursor_pos < input.chars().count() {
                             *cursor_pos += 1;
                         }
                         if is_key_pressed(KeyCode::Home) {
                             *cursor_pos = 0;
                         }
                         if is_key_pressed(KeyCode::End) {
-                            *cursor_pos = input.len();
+                            *cursor_pos = input.chars().count();
                         }
                         
                         // Execute command on Enter
@@ -638,13 +640,9 @@ async fn main() {
                             if !cmd.is_empty() {
                                 history.push(format!("> {}", cmd));
                                 let state = execute_console_command(&cmd, &mut game.debug_hitbox_visible, &mut game.time_scale, &mut ship, &mut wave_director, &mut game_score, &mut lives, &mut enemy_vec, &mut bullet_vec, &mut pirate_vec, &mut cannonball_vec, &mut pirate_count, history);
-                                if let Some(s) = state {
-                                    input.clear();
-                                    *cursor_pos = 0;
-                                    Some(s)
-                                } else {
-                                    None
-                                }
+                                input.clear();
+                                *cursor_pos = 0;
+                                state
                             } else {
                                 None
                             }

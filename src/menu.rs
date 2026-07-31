@@ -143,6 +143,10 @@ pub fn draw_pause_menu(selected_item: usize) {
     draw_text(controls, ctrl_x, screen_height() * 0.85, ctrl_size, GRAY);
 }
 
+pub(crate) fn char_to_byte(input: &str, char_idx: usize) -> usize {
+    input.char_indices().nth(char_idx).map(|(b, _)| b).unwrap_or(input.len())
+}
+
 pub fn draw_console(input: &str, history: &[String], cursor_pos: usize) {
     let overlay_color = Color::new(0.0, 0.0, 0.0, 0.85);
     draw_rectangle(0.0, 0.0, screen_width(), screen_height(), overlay_color);
@@ -166,7 +170,8 @@ pub fn draw_console(input: &str, history: &[String], cursor_pos: usize) {
     let input_y = screen_height() - 60.0;
     draw_text(prompt, input_x, input_y, 22.0, WHITE);
     
-    let input_text = &input[..cursor_pos.min(input.len())];
+    let text_len = input.chars().count();
+    let input_text = &input[..char_to_byte(input, cursor_pos.min(text_len))];
     let cursor_x = input_x + measure_text(prompt, None, 22, 1.0).width + measure_text(input_text, None, 22, 1.0).width;
     
     draw_text(input, input_x + measure_text(prompt, None, 22, 1.0).width, input_y, 22.0, WHITE);
@@ -178,4 +183,47 @@ pub fn draw_console(input: &str, history: &[String], cursor_pos: usize) {
     
     let help = "Commands: help, god, heal, wave <n>, score <n>, lives <n>, spawn <enemy>, killall, fps, quit";
     draw_text(help, 20.0, screen_height() - 30.0, 16.0, GRAY);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::char_to_byte;
+
+    #[test]
+    fn test_char_to_byte_maps_char_indices() {
+        let s = "r\u{e9}load"; // 'é' is 2 bytes in UTF-8
+        assert_eq!(s.chars().count(), 6);
+        assert_eq!(char_to_byte(s, 0), 0);
+        assert_eq!(char_to_byte(s, 1), 1); // start of 'é'
+        assert_eq!(char_to_byte(s, 2), 3); // past 'é'
+        assert_eq!(char_to_byte(s, 5), 6); // start of last char 'd'
+        assert_eq!(char_to_byte(s, 6), 7); // out of range -> len
+        assert_eq!(char_to_byte(s, 99), 7);
+    }
+
+    #[test]
+    fn test_insert_remove_at_char_boundary() {
+        let mut input = String::from("r\u{e9}load");
+        let byte_idx = char_to_byte(&input, 6);
+        input.insert(byte_idx, '!');
+        assert_eq!(input, "r\u{e9}load!");
+
+        let byte_idx = char_to_byte(&input, 6);
+        input.remove(byte_idx);
+        assert_eq!(input, "r\u{e9}load");
+
+        let byte_idx = char_to_byte(&input, 5);
+        input.remove(byte_idx);
+        assert_eq!(input, "r\u{e9}loa");
+    }
+
+    #[test]
+    fn test_cursor_slice_is_char_safe() {
+        let s = "r\u{e9}load";
+        let n = s.chars().count();
+        for pos in 0..=n {
+            let text = &s[..char_to_byte(s, pos)];
+            assert_eq!(text.chars().count(), pos);
+        }
+    }
 }
