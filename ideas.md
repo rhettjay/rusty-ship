@@ -70,3 +70,56 @@ Every 5th or 10th wave should be a Boss.
 4.  Once that feels fun, you have your foundation. Everything else (art, waves, pirates) is just decorating that foundation.
 
 *Search terms to help you find specific tutorials:* "Shmup tutorial [Engine Name]", "Object pooling bullets [Engine Name]", "Pixel perfect rendering 2D [Engine Name]".
+
+---
+
+## Issues found during session 2026-07-30
+
+### Enemy spawning
+- Enemies spawned at y=-50 with entry_target_y set to spawn y (also -50), so entry animation instantly finished off-screen
+- Formation drift was `speed_y * dt * 0.3` = ~0.005 px/frame — took ~3 minutes to become visible
+- **Fix:** entry_target_y randomized 80–200, drift changed to sinusoidal bob
+
+### Wave progression
+- State edge-detection for wave completion captured state *after* `wave_director.update()`, so `prev == current` on transition frames — never detected
+- After wave reached Complete, no code called `start_wave(next)` — game sat idle
+- **Fix:** capture state before update; auto-advance to next wave when no dialogue triggers
+
+### Boss waves
+- `boss_waves` in config was `[3, 6, 9, 12, 15]` but `wave_director.rs` used `matches!(wave, 5 | 10 | 15)` — mismatch
+- Auto-advancing into a boss wave left `wave_state = BossIntro` with `game.state = Playing` — softlock
+- **Fix:** config aligned to `[5, 10, 15]`; auto-advance transitions to `GameState::BossIntro`; boss defeat triggers `BossDefeated` narrative → defeat dialogue → `NextChapter`
+
+### Powerups
+- `vel_y` was `rng.gen_range(0.5..1.5)` then multiplied by `dt` — ~0.008 px/s, 28 min to reach ship
+- **Fix:** changed to `60.0..120.0` — crosses screen in 6–12 seconds
+
+### Miscellaneous bugs fixed
+- `formation_offset` had `target_y - self.x` instead of `self.y`
+- Menu navigation used `% 4` hardcoded but "No save" showed 3 items
+- Console `heal`/`powerup` set ship timer fields but shooting code checked manager timers
+- Double cannonball draw in Dialogue state
+- Chapter number incremented twice on boss defeat (narrative trigger + callback)
+
+---
+
+## Ideas for future beef-ups
+
+### Visual feel (high leverage, low code)
+- **Screen shake:** translate draw offset randomly for 0.1s on enemy death / player hit (~20 lines)
+- **Hitstop / freeze frame:** pause game for 2–3 frames on killing blow to add weight
+- **Explosion particles:** spawn 5–10 fading circles at enemy death position
+- **Score popups:** floating "+10"/"+50" text at enemy death with upward drift and fade
+- **Player hit flash:** brief invulnerability + sprite flash on damage (1–2s invuln window)
+- **Boss entrance animation:** slow dramatic float-in with pause, not instant `y += 2`
+
+### Gameplay
+- **Enemy dive timer:** in `update_regular_wave`, periodically set random enemy to `BehaviorState::Diving` — dive code already exists, just needs a trigger
+- **Enemy variety through existing types:** Scouts move fast, Bombers drop gravity-affected bombs, Interceptors aim at player — all already implemented, just need tuning
+- **Wave transition animation:** brief flash / zoom between waves
+
+### Code hygiene
+- **Delete `state.rs`:** dead ggez-era file with typos (`prelud`). Will break build if `mod state;` is added
+- **Wire up `FormationManager`:** exists in `formation.rs` with Vee/Line/Circle/Grid/Chaos patterns but `WaveDirector` spawns at random x instead
+- **Simplify enemy spawning:** `FormationManager.start_formation` → `update` gives positioned formations. Could replace the inline random spawns
+- **Sprite loading:** currently all entities draw as colored rectangles. Add `include_bytes!` sprite loading at init for enemies, bullets, powerups (same pattern as `background.png` and `ship.png`)
