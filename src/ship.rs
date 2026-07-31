@@ -20,6 +20,7 @@ pub struct Ship {
     pub rapid_fire_timer: f32,
     pub spread_shot_timer: f32,
     pub pierce_timer: f32,
+    pub invuln_timer: f32,
 }
 
 impl Ship {
@@ -35,6 +36,9 @@ impl Ship {
     }
 
     pub fn draw(&self, texture: &Texture2D) {
+        if self.invuln_timer > 0.0 && (self.invuln_timer * 8.0).sin() > 0.0 {
+            return;
+        }
         draw_texture(texture, self.x, self.y, self.color);
         if self.has_shield {
             draw_circle_lines(self.x + self.w / 2.0, self.y + self.h / 2.0, self.w.max(self.h) * 0.7, 2.0, Color::new(0.5, 0.8, 1.0, 0.8));

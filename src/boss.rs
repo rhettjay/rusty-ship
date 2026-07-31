@@ -595,21 +595,27 @@ impl Boss {
     fn scatter_shot(&mut self, player_x: f32, player_y: f32) {
         let center_x = self.x + self.width / 2.0;
         let center_y = self.y + self.height;
-        let count = 12;
-        let angle_step = std::f32::consts::TAU / count as f32;
+        let count = 8;
+        let spread = std::f32::consts::FRAC_PI_2;
+        let dx = player_x - center_x;
+        let dy = player_y - center_y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        let base_angle = if dist > 0.0 { dy.atan2(dx) } else { std::f32::consts::FRAC_PI_2 };
+        let speed = 4.0;
         
         for i in 0..count {
-            let angle = i as f32 * angle_step + self.move_timer as f32 * 2.0;
+            let t = i as f32 / (count - 1).max(1) as f32;
+            let angle = base_angle + (t - 0.5) * spread;
             self.projectiles.push(BossProjectile {
                 x: center_x,
                 y: center_y,
-                vel_x: angle.cos() * 3.5,
-                vel_y: angle.sin() * 3.5,
+                vel_x: angle.cos() * speed,
+                vel_y: angle.sin() * speed,
                 damage: 1,
                 size: 10.0,
                 color: PINK,
                 lifetime: 4.0,
-                pattern: ProjectilePattern::Wave,
+                pattern: ProjectilePattern::Straight,
             });
         }
     }
@@ -950,5 +956,122 @@ impl Boss {
 
     pub fn is_reverse_zone_active(&self) -> bool {
         *self.pattern_state.get("reverse_zone_active").unwrap_or(&0.0) > 0.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_boss(health: i32, max_health: i32) -> Boss {
+        let mut state = std::collections::HashMap::new();
+        state.insert("burst_count".to_string(), 0.0);
+        state.insert("charge_ready".to_string(), 0.0);
+        Boss {
+            boss_type: BossType::Blowfish,
+            x: 0.0,
+            y: 0.0,
+            width: 80.0,
+            height: 80.0,
+            health,
+            max_health,
+            phase: BossPhase::Phase1,
+            phase_timer: 0.0,
+            attack_timer: 0.0,
+            move_timer: 0.0,
+            speed_x: 2.0,
+            speed_y: 1.0,
+            is_dead: false,
+            invulnerable: false,
+            invuln_timer: 0.0,
+            projectiles: Vec::new(),
+            pattern_state: state,
+            sprite: None,
+            portrait: None,
+            color: WHITE,
+            entry_anim: false,
+            entry_timer: 0.0,
+        }
+    }
+
+    #[test]
+    fn test_take_damage_reduces_health() {
+        let mut boss = make_boss(150, 150);
+        boss.take_damage(10);
+        assert_eq!(boss.health, 140);
+        assert!(!boss.is_dead);
+    }
+
+    #[test]
+    fn test_take_damage_kills_boss() {
+        let mut boss = make_boss(150, 150);
+        let dead = boss.take_damage(150);
+        assert!(dead);
+        assert_eq!(boss.health, 0);
+        assert!(boss.is_dead);
+    }
+
+    #[test]
+    fn test_invulnerable_prevents_damage() {
+        let mut boss = make_boss(150, 150);
+        boss.invulnerable = true;
+        let result = boss.take_damage(10);
+        assert!(!result);
+        assert_eq!(boss.health, 150);
+    }
+
+    #[test]
+    fn test_entry_anim_prevents_damage() {
+        let mut boss = make_boss(150, 150);
+        boss.entry_anim = true;
+        let result = boss.take_damage(10);
+        assert!(!result);
+        assert_eq!(boss.health, 150);
+    }
+
+    #[test]
+    fn test_invulnerable_sets_after_damage() {
+        let mut boss = make_boss(150, 150);
+        boss.take_damage(10);
+        assert!(boss.invulnerable);
+        assert_eq!(boss.invuln_timer, 0.1);
+    }
+
+    #[test]
+    fn test_phase_transition_to_phase2() {
+        let mut boss = make_boss(75, 150);
+        boss.update_phase();
+        assert_eq!(boss.phase, BossPhase::Phase2);
+    }
+
+    #[test]
+    fn test_phase_transition_to_phase3() {
+        let mut boss = make_boss(30, 150);
+        boss.update_phase();
+        assert_eq!(boss.phase, BossPhase::Phase3);
+    }
+
+    #[test]
+    fn test_phase_remains_phase1_above_half() {
+        let mut boss = make_boss(100, 150);
+        boss.update_phase();
+        assert_eq!(boss.phase, BossPhase::Phase1);
+    }
+
+    #[test]
+    fn test_get_rect() {
+        let boss = make_boss(150, 150);
+        let (x, y, w, h) = boss.get_rect();
+        assert_eq!(w, 80.0);
+        assert_eq!(h, 80.0);
+        assert_eq!(x, 0.0);
+        assert_eq!(y, 0.0);
+    }
+
+    #[test]
+    fn test_boss_phase_defaults_to_phase1() {
+        let boss = make_boss(150, 150);
+        assert_eq!(boss.phase, BossPhase::Phase1);
+        assert!(!boss.is_dead);
     }
 }

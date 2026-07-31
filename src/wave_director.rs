@@ -4,6 +4,7 @@ use crate::formation::{get_wave_formations, get_wave_duration, get_spawn_interva
 use crate::powerup::{PowerUpManager, PowerupEffect};
 use crate::config::PowerupType;
 use crate::boss::{Boss, BossType};
+use crate::bullet::Bullet;
 use ::rand::Rng;
 use serde::{Serialize, Deserialize};
 
@@ -60,7 +61,7 @@ impl WaveDirector {
         self.spawn_interval = get_spawn_interval_for_wave(wave);
         self.max_enemies = self.get_max_enemies_for_wave(wave);
         self.enemies_spawned = 0;
-        self.powerup_manager = PowerUpManager::new();
+        self.powerup_manager.powerups.clear();
         self.current_boss = None;
     }
 
@@ -76,7 +77,7 @@ impl WaveDirector {
         }
     }
 
-    pub fn update(&mut self, dt: f64, enemy_vec: &mut Vec<Enemy>, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {
+    pub fn update(&mut self, dt: f64, enemy_vec: &mut Vec<Enemy>, bullet_vec: &mut Vec<Bullet>, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {
         if self.wave_state == WaveState::Inactive {
             return;
         }
@@ -84,7 +85,7 @@ impl WaveDirector {
         self.wave_timer += dt;
 
         if self.is_boss_wave {
-            self.update_boss_wave(dt, enemy_vec, ship, cannonball_vec, pirate_vec, game_score, lives);
+            self.update_boss_wave(dt, enemy_vec, bullet_vec, ship, cannonball_vec, pirate_vec, game_score, lives);
         } else {
             self.update_regular_wave(dt, enemy_vec, ship, cannonball_vec, pirate_vec, game_score, lives);
         }
@@ -134,7 +135,7 @@ impl WaveDirector {
         }
     }
 
-    fn update_boss_wave(&mut self, dt: f64, enemy_vec: &mut Vec<Enemy>, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {
+    fn update_boss_wave(&mut self, dt: f64, enemy_vec: &mut Vec<Enemy>, bullet_vec: &mut Vec<Bullet>, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {
         match self.wave_state {
             WaveState::BossIntro => {
             }
@@ -142,21 +143,28 @@ impl WaveDirector {
                 if let Some(boss) = &mut self.current_boss {
                     boss.update(dt, ship.x, ship.y);
                     
-                    for cannonball in cannonball_vec.iter_mut() {
-                        if cannonball.is_active && !cannonball.is_dead {
-                            let (bx, by, bw, bh) = boss.get_rect();
-                            let (cx, cy, cw, ch) = cannonball.get_rect();
-                            if cx < bx + bw && cx + cw > bx && cy < by + bh && cy + ch > by {
-                                cannonball.is_dead = true;
-                                if boss.take_damage(cannonball.damage) {
-                                    *game_score += 1000;
-                                    self.wave_state = WaveState::BossDefeated;
-                                }
+                    for bullet in bullet_vec.iter_mut() {
+                        if bullet.is_dead || bullet.is_laser {
+                            continue;
+                        }
+                        let (bx, by, bw, bh) = boss.get_rect();
+                        let (bul_x, bul_y, bul_w, bul_h) = bullet.get_rect();
+                        if bul_x < bx + bw && bul_x + bul_w > bx && bul_y < by + bh && bul_y + bul_h > by {
+                            if boss.take_damage(bullet.damage) {
+                                *game_score += 1000;
+                                self.wave_state = WaveState::BossDefeated;
                             }
+                            if !bullet.pierce() {
+                                bullet.is_dead = true;
+                            }
+                            bullet.hit_flash = 0.1;
                         }
                     }
                     
                     for projectile in boss.get_projectiles() {
+                        if ship.invuln_timer > 0.0 {
+                            continue;
+                        }
                         let (bx, by, bw, bh) = projectile.get_rect();
                         let (sx, sy, sw, sh) = ship.get_rect();
                         if bx < sx + sw && bx + bw > sx && by < sy + sh && by + bh > sy {
@@ -164,6 +172,7 @@ impl WaveDirector {
                                 ship.consume_shield();
                             } else {
                                 *lives = lives.saturating_sub(1);
+                                ship.invuln_timer = 2.0;
                                 if *lives == 0 {
                                     ship.gameover = true;
                                 }
@@ -216,7 +225,7 @@ impl WaveDirector {
         };
         draw_text(&wave_text, screen_width() * 0.5 - measure_text(&wave_text, None, 32, 1.0).width * 0.5, 30.0, 32.0, GOLD);
 
-        if !self.is_boss_wave && self.wave_state != WaveState::Inactive {
+        if cfg!(debug_assertions) && !self.is_boss_wave && self.wave_state != WaveState::Inactive {
             let progress = self.wave_timer / self.wave_duration as f64;
             let bar_w = 200.0;
             let bar_x = screen_width() * 0.5 - bar_w * 0.5;
@@ -247,4 +256,89 @@ fn rects_overlap(r1: (f32, f32, f32, f32), r2: (f32, f32, f32, f32)) -> bool {
     r1.0 + r1.2 > r2.0 &&
     r1.1 < r2.1 + r2.3 &&
     r1.1 + r1.3 > r2.1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_wave_director() {
+        let wd = WaveDirector::new();
+        assert_eq!(wd.current_wave, 0);
+        assert_eq!(wd.wave_state, WaveState::Inactive);
+        assert!(!wd.is_boss_wave);
+        assert!(wd.current_boss.is_none());
+        assert!(!wd.is_wave_complete());
+        assert!(!wd.is_boss_active());
+    }
+
+    #[test]
+    fn test_boss_wave_detection() {
+        let mut wd = WaveDirector::new();
+        wd.start_wave(5);
+        assert!(wd.is_boss_wave);
+        assert_eq!(wd.current_wave, 5);
+        assert_eq!(wd.wave_state, WaveState::BossIntro);
+    }
+
+    #[test]
+    fn test_regular_wave_detection() {
+        let mut wd = WaveDirector::new();
+        wd.start_wave(1);
+        assert!(!wd.is_boss_wave);
+        assert_eq!(wd.current_wave, 1);
+        assert_eq!(wd.wave_state, WaveState::Spawning);
+    }
+
+    #[test]
+    fn test_wave_10_is_boss() {
+        let mut wd = WaveDirector::new();
+        wd.start_wave(10);
+        assert!(wd.is_boss_wave);
+    }
+
+    #[test]
+    fn test_wave_15_is_boss() {
+        let mut wd = WaveDirector::new();
+        wd.start_wave(15);
+        assert!(wd.is_boss_wave);
+    }
+
+    #[test]
+    fn test_get_max_enemies() {
+        let wd = WaveDirector::new();
+        assert_eq!(wd.get_max_enemies_for_wave(1), 6);
+        assert_eq!(wd.get_max_enemies_for_wave(5), 0);
+        assert_eq!(wd.get_max_enemies_for_wave(6), 14);
+        assert_eq!(wd.get_max_enemies_for_wave(15), 0);
+    }
+
+    #[test]
+    fn test_rects_overlap() {
+        assert!(rects_overlap((0.0, 0.0, 10.0, 10.0), (5.0, 5.0, 10.0, 10.0)));
+        assert!(!rects_overlap((0.0, 0.0, 5.0, 5.0), (10.0, 10.0, 5.0, 5.0)));
+    }
+
+    #[test]
+    fn test_boss_active_check() {
+        let mut wd = WaveDirector::new();
+        assert!(!wd.is_boss_active());
+        wd.wave_state = WaveState::BossIntro;
+        assert!(wd.is_boss_active());
+        wd.wave_state = WaveState::BossFight;
+        assert!(wd.is_boss_active());
+        wd.wave_state = WaveState::BossDefeated;
+        assert!(!wd.is_boss_active());
+    }
+
+    #[test]
+    fn test_wave_complete_check() {
+        let mut wd = WaveDirector::new();
+        assert!(!wd.is_wave_complete());
+        wd.wave_state = WaveState::Complete;
+        assert!(wd.is_wave_complete());
+        wd.wave_state = WaveState::BossDefeated;
+        assert!(wd.is_wave_complete());
+    }
 }
