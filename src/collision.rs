@@ -20,3 +20,50 @@ pub fn check_collision(a: &Hitbox, b: &Hitbox) -> bool {
     a.y < b.y + b.h &&
     a.y + a.h > b.y
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_overlap() {
+        let a = Hitbox::new(0.0, 0.0, 10.0, 10.0);
+        let b = Hitbox::new(5.0, 5.0, 10.0, 10.0);
+        assert!(check_collision(&a, &b));
+    }
+
+    #[test]
+    fn test_no_overlap() {
+        let a = Hitbox::new(0.0, 0.0, 10.0, 10.0);
+        let b = Hitbox::new(20.0, 20.0, 10.0, 10.0);
+        assert!(!check_collision(&a, &b));
+    }
+
+    #[test]
+    fn test_contained() {
+        let a = Hitbox::new(0.0, 0.0, 20.0, 20.0);
+        let b = Hitbox::new(5.0, 5.0, 5.0, 5.0);
+        assert!(check_collision(&a, &b));
+    }
+
+    #[test]
+    fn test_edge_touching() {
+        let a = Hitbox::new(0.0, 0.0, 10.0, 10.0);
+        let b = Hitbox::new(10.0, 0.0, 10.0, 10.0);
+        assert!(!check_collision(&a, &b));
+    }
+
+    #[test]
+    fn test_negative_coords() {
+        let a = Hitbox::new(-5.0, -5.0, 10.0, 10.0);
+        let b = Hitbox::new(0.0, 0.0, 10.0, 10.0);
+        assert!(check_collision(&a, &b));
+    }
+
+    #[test]
+    fn test_zero_size() {
+        let a = Hitbox::new(5.0, 5.0, 0.0, 0.0);
+        let b = Hitbox::new(5.0, 5.0, 10.0, 10.0);
+        assert!(!check_collision(&a, &b));
+    }
+}
