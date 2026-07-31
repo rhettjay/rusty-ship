@@ -69,6 +69,7 @@ async fn main() {
         rapid_fire_timer: 0.0,
         spread_shot_timer: 0.0,
         pierce_timer: 0.0,
+        invuln_timer: 0.0,
     };
 
     let mut enemy_vec: Vec<Enemy> = vec![];
@@ -227,9 +228,12 @@ async fn main() {
                     }
                 }
                 
+                let prev_wave_state = wave_director.wave_state;
+                
                 wave_director.update(
                     dt, 
-                    &mut enemy_vec, 
+                    &mut enemy_vec,
+                    &mut bullet_vec,
                     &mut ship, 
                     &mut cannonball_vec, 
                     &mut pirate_vec, 
@@ -238,11 +242,10 @@ async fn main() {
                 );
                 
                 // Auto-save on wave completion or boss defeated
-                let prev_wave_state = wave_director.wave_state;
+                let prev_wave_complete = matches!(prev_wave_state, WaveState::Complete | WaveState::BossDefeated);
                 let wave_complete = wave_director.is_wave_complete();
                 
-                if wave_complete && !matches!(prev_wave_state, WaveState::Complete | WaveState::BossDefeated) {
-                    // Save just before boss or after boss defeat
+                if wave_complete && !prev_wave_complete {
                     let save_result = save_game(
                         game_score,
                         lives,
@@ -264,6 +267,19 @@ async fn main() {
                     );
                     if let Err(e) = save_result {
                         eprintln!("Auto-save failed: {}", e);
+                    }
+                    
+                    if wave_director.is_boss_wave {
+                        let boss_type = boss_for_wave(wave_director.current_wave);
+                        if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::BossDefeated(boss_type)) {
+                            game.state = GameState::Dialogue(dialogue.clone());
+                            dialogue_engine.start_dialogue(&dialogue).ok();
+                        }
+                    } else {
+                        wave_director.start_wave(wave_director.current_wave + 1);
+                        if wave_director.is_boss_wave {
+                            game.state = GameState::BossIntro(boss_for_wave(wave_director.current_wave));
+                        }
                     }
                 }
                 
@@ -299,6 +315,10 @@ async fn main() {
                     }
                 }
                 
+                if ship.invuln_timer > 0.0 {
+                    ship.invuln_timer -= dt as f32;
+                }
+
                 for bullet in &mut bullet_vec {
                     bullet.update(dt);
                 }
@@ -326,17 +346,10 @@ async fn main() {
                     play_music("menu_music");
                 }
                 
-                if wave_director.is_wave_complete() && !wave_director.is_boss_active() {
-                    if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::WaveCleared(wave_director.current_wave)) {
+                if game_score >= CONFIG.bonus_score_threshold && !wave_director.is_boss_active() && wave_complete && !prev_wave_complete {
+                    if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::ScoreThreshold(game_score)) {
                         game.state = GameState::Dialogue(dialogue.clone());
                         dialogue_engine.start_dialogue(&dialogue).ok();
-                    }
-                    
-                    if game_score >= CONFIG.bonus_score_threshold {
-                        if let Some(dialogue) = check_triggers(&mut game.narrative, NarrativeTrigger::ScoreThreshold(game_score)) {
-                            game.state = GameState::Dialogue(dialogue.clone());
-                            dialogue_engine.start_dialogue(&dialogue).ok();
-                        }
                     }
                 }
                 
@@ -420,9 +433,6 @@ async fn main() {
                     } else {
                         bullet.draw(None);
                     }
-                }
-                for cannonball in &cannonball_vec {
-                    cannonball.draw();
                 }
                 ship.draw(&ship_sprite);
                 
@@ -1084,8 +1094,8 @@ fn check_collisions(
         }
     }
     
-    for bullet in bullet_vec.iter() {
-        if bullet.is_dead {
+    for bullet in bullet_vec.iter_mut() {
+        if bullet.is_dead || ship.invuln_timer > 0.0 {
             continue;
         }
         
@@ -1093,10 +1103,12 @@ fn check_collisions(
         let (sx, sy, sw, sh) = ship.get_rect();
         
         if bx < sx + sw && bx + bw > sx && by < sy + sh && by + bh > sy {
+            bullet.is_dead = true;
             if ship.has_shield() {
                 ship.consume_shield();
             } else if *lives > 0 {
                 *lives -= 1;
+                ship.invuln_timer = 2.0;
             } else {
                 ship.gameover = true;
             }
@@ -1119,4 +1131,13 @@ fn check_collisions(
     
     enemy_vec.retain(|e| !e.is_dead);
     pirate_vec.retain(|p| !p.is_dead && p.y < screen_height());
+}
+
+fn boss_for_wave(wave: u32) -> BossType {
+    match wave {
+        5 => BossType::Blowfish,
+        10 => BossType::Twofish,
+        15 => BossType::CaptainDavey,
+        _ => BossType::Blowfish,
+    }
 }
