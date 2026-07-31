@@ -107,15 +107,23 @@ async fn main() {
             GameState::MainMenu => {
                 draw_menu(&game, &background_asset);
                 
+                let has_save = crate::save::has_save_file();
+                let menu_items: &[&str] = if has_save {
+                    &["Start Game", "Load Game", "Settings", "Quit"]
+                } else {
+                    &["Start Game", "Settings", "Quit"]
+                };
+                let item_count = menu_items.len();
+
                 if is_key_pressed(KeyCode::Up) {
-                    game.selected_menu_item = (game.selected_menu_item + 3) % 4;
+                    game.selected_menu_item = (game.selected_menu_item + item_count - 1) % item_count;
                 }
                 if is_key_pressed(KeyCode::Down) {
-                    game.selected_menu_item = (game.selected_menu_item + 1) % 4;
+                    game.selected_menu_item = (game.selected_menu_item + 1) % item_count;
                 }
                 if is_key_pressed(KeyCode::Enter) {
-                    match game.selected_menu_item {
-                        0 => {
+                    match menu_items[game.selected_menu_item] {
+                        "Start Game" => {
                             game.state = GameState::Playing;
                             reset_game(&mut ship, &mut cannonball_vec, &mut pirate_vec, 
                                      &mut enemy_vec, &mut bullet_vec, &mut pirate_count, 
@@ -124,11 +132,10 @@ async fn main() {
                             play_music("gameplay_music");
                             show_mouse(false);
                         }
-                        1 => { // Load Game
+                        "Load Game" => {
                             match load_game() {
                                 Ok(save) => {
                                     apply_save(save, &mut ship, &mut wave_director, &mut game, &mut game_score, &mut lives);
-                                    // Clear existing entities
                                     enemy_vec.clear();
                                     bullet_vec.clear();
                                     cannonball_vec.clear();
@@ -139,14 +146,12 @@ async fn main() {
                                 }
                                 Err(e) => {
                                     eprintln!("Load failed: {}", e);
-                                    // Could show error message
                                 }
                             }
                         }
-                        2 => {
-                            game.state = GameState::GameOver;
+                        "Settings" => {
                         }
-                        3 => {
+                        "Quit" => {
                             std::process::exit(0);
                         }
                         _ => {}

@@ -29,7 +29,6 @@ pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigge
             if !progress.defeated_bosses.contains(&boss_str) {
                 progress.defeated_bosses.push(boss_str);
             }
-            progress.current_chapter += 1;
             Some(boss_defeat_dialogue(boss_type))
         }
         NarrativeTrigger::ScoreThreshold(score) => {

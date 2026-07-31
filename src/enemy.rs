@@ -197,7 +197,7 @@ impl Enemy {
             is_elite: enemy_type.is_elite(),
             formation_offset: None,
             entry_anim: true,
-            entry_target_y: y,
+            entry_target_y: rng.gen_range(80.0..200.0),
             hit_flash: 0.0,
             behavior_state: BehaviorState::Entering,
         }
@@ -289,7 +289,7 @@ impl Enemy {
 
     fn update_formation_movement(&mut self, dt: f64) {
         self.x += self.speed_x * dt as f32;
-        self.y += self.speed_y * dt as f32 * 0.3;
+        self.y += (self.speed_y * dt as f32 * 0.5).sin() * 0.3;
 
         if self.x <= self.width / 2.0 || self.x >= screen_width() - self.width / 2.0 {
             self.speed_x = -self.speed_x;

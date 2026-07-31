@@ -66,7 +66,7 @@ impl GameConfig {
             starting_pirate_count: 10,
             
             waves_per_chapter: 3,
-            boss_waves: &[3, 6, 9, 12, 15],
+            boss_waves: &[5, 10, 15],
             bonus_score_threshold: 50000,
             
             dialogue_typewriter_speed: 30.0,

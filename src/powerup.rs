@@ -24,7 +24,7 @@ impl PowerUp {
             powerup_type,
             x,
             y,
-            vel_y: rng.gen_range(0.5..1.5),
+            vel_y: rng.gen_range(60.0..120.0),
             lifetime: 0.0,
             max_lifetime: 15.0,
             is_active: true,
@@ -204,6 +204,7 @@ impl PowerUp {
                 Some(PowerupEffect::Pierce(duration))
             }
             PowerupType::Shield => {
+                ship.has_shield = true;
                 Some(PowerupEffect::Shield)
             }
             PowerupType::Bomb => {
