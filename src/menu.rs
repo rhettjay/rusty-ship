@@ -32,6 +32,8 @@ pub struct Game {
     pub state: GameState,
     pub selected_menu_item: usize,
     pub narrative: NarrativeProgress,
+    pub debug_hitbox_visible: bool,
+    pub time_scale: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -61,6 +63,8 @@ impl Game {
             state: GameState::MainMenu,
             selected_menu_item: 0,
             narrative: NarrativeProgress::new(),
+            debug_hitbox_visible: false,
+            time_scale: 1.0,
         }
     }
 }

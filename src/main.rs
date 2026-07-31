@@ -100,7 +100,7 @@ async fn main() {
     play_music("menu_music");
 
     loop {
-        let dt = get_frame_time() as f64;
+            let dt = (get_frame_time() as f64) * game.time_scale as f64;
         update_audio(dt);
         clear_background(BLACK);
         
@@ -398,9 +398,37 @@ async fn main() {
                 // Draw ship
                 ship.draw(&ship_sprite);
                 
+                if game.debug_hitbox_visible {
+                    for enemy in &enemy_vec {
+                        if !enemy.is_dead {
+                            let (x, y, w, h) = enemy.get_rect();
+                            draw_rectangle_lines(x, y, w, h, 1.0, RED);
+                        }
+                    }
+                    for bullet in &bullet_vec {
+                        if !bullet.is_dead {
+                            let (x, y, w, h) = bullet.get_rect();
+                            draw_rectangle_lines(x, y, w, h, 1.0, YELLOW);
+                        }
+                    }
+                    let (sx, sy, sw, sh) = ship.get_rect();
+                    draw_rectangle_lines(sx, sy, sw, sh, 1.0, GREEN);
+                    if let Some(boss) = wave_director.get_current_boss() {
+                        let (bx, by, bw, bh) = boss.get_rect();
+                        draw_rectangle_lines(bx, by, bw, bh, 1.0, RED);
+                        for p in boss.get_projectiles() {
+                            draw_circle_lines(p.x, p.y, p.size / 2.0, 1.0, RED);
+                        }
+                    }
+                }
+                
                 // Draw UI
                 draw_ui(game_score, lives, wave_director.current_wave, &game.narrative);
                 wave_director.draw_wave_info();
+
+                if cfg!(debug_assertions) {
+                    draw_text("DEBUG MODE", screen_width() - 120.0, screen_height() - 10.0, 16.0, Color::new(0.5, 0.5, 0.5, 1.0));
+                }
                 
                 if wave_director.is_boss_active() {
                     if let Some(boss) = wave_director.get_current_boss() {
@@ -603,7 +631,7 @@ async fn main() {
                             let cmd = input.trim().to_lowercase();
                             if !cmd.is_empty() {
                                 history.push(format!("> {}", cmd));
-                                let state = execute_console_command(&cmd, &mut ship, &mut wave_director, &mut game_score, &mut lives, &mut enemy_vec, &mut bullet_vec, &mut pirate_vec, &mut cannonball_vec, &mut pirate_count, history);
+                                let state = execute_console_command(&cmd, &mut game.debug_hitbox_visible, &mut game.time_scale, &mut ship, &mut wave_director, &mut game_score, &mut lives, &mut enemy_vec, &mut bullet_vec, &mut pirate_vec, &mut cannonball_vec, &mut pirate_count, history);
                                 if let Some(s) = state {
                                     input.clear();
                                     *cursor_pos = 0;
@@ -835,6 +863,8 @@ fn draw_boss_health_bar(boss: &Boss) {
 
 fn execute_console_command(
     cmd: &str,
+    debug_hitbox_visible: &mut bool,
+    time_scale: &mut f32,
     ship: &mut Ship,
     wave_director: &mut WaveDirector,
     game_score: &mut i32,
@@ -861,8 +891,13 @@ fn execute_console_command(
             history.push("  score <n>               - Set score to n".to_string());
             history.push("  lives <n>               - Set lives to n".to_string());
             history.push("  spawn <enemy_type>      - Spawn enemy (scout, fighter, bomber, interceptor, elite)".to_string());
+            history.push("  spawn <boss-name>       - Spawn boss (blowfish, twofish, rufus, molly, davey, deadbeef)".to_string());
             history.push("  killall                 - Kill all enemies".to_string());
             history.push("  powerup <type>          - Give powerup (rapid, spread, pierce, shield)".to_string());
+            history.push("  hitbox                  - Toggle hitbox overlay".to_string());
+            history.push("  time <scale>            - Set time scale (0.x slow, 2.x fast)".to_string());
+            history.push("  state                   - Print current game state".to_string());
+            history.push("  damage <boss> <n>       - Damage current boss by n".to_string());
             history.push("  fps                     - Toggle FPS display".to_string());
             history.push("  quit                    - Quit to main menu".to_string());
         }
@@ -879,6 +914,10 @@ fn execute_console_command(
             ship.rapid_fire_timer = 30.0;
             ship.spread_shot_timer = 30.0;
             ship.pierce_timer = 30.0;
+            wave_director.powerup_manager.rapid_fire_timer = 30.0;
+            wave_director.powerup_manager.spread_shot_timer = 30.0;
+            wave_director.powerup_manager.pierce_timer = 30.0;
+            wave_director.powerup_manager.has_shield = true;
             history.push("Ship healed and powered up!".to_string());
         }
         "wave" => {
@@ -931,24 +970,60 @@ fn execute_console_command(
         "spawn" => {
             if parts.len() > 1 {
                 use crate::enemy::{Enemy, EnemyType};
-                let enemy_type = match parts[1].to_lowercase().as_str() {
-                    "scout" => EnemyType::Scout,
-                    "fighter" => EnemyType::Fighter,
-                    "bomber" => EnemyType::Bomber,
-                    "interceptor" => EnemyType::Interceptor,
-                    "elite" => EnemyType::Elite,
-                    _ => {
-                        history.push("Unknown enemy type. Use: scout, fighter, bomber, interceptor, elite".to_string());
-                        return None;
+                match parts[1].to_lowercase().as_str() {
+                    "scout" => {
+                        let enemy = Enemy::new(EnemyType::Scout, screen_width() / 2.0, -50.0, wave_director.current_wave);
+                        enemy_vec.push(enemy);
+                        history.push("Spawned Scout".to_string());
                     }
-                };
-                let x = screen_width() / 2.0;
-                let y = -50.0;
-                let enemy = Enemy::new(enemy_type, x, y, wave_director.current_wave);
-                enemy_vec.push(enemy);
-                history.push(format!("Spawned {:?}", enemy_type));
+                    "fighter" => {
+                        let enemy = Enemy::new(EnemyType::Fighter, screen_width() / 2.0, -50.0, wave_director.current_wave);
+                        enemy_vec.push(enemy);
+                        history.push("Spawned Fighter".to_string());
+                    }
+                    "bomber" => {
+                        let enemy = Enemy::new(EnemyType::Bomber, screen_width() / 2.0, -50.0, wave_director.current_wave);
+                        enemy_vec.push(enemy);
+                        history.push("Spawned Bomber".to_string());
+                    }
+                    "interceptor" => {
+                        let enemy = Enemy::new(EnemyType::Interceptor, screen_width() / 2.0, -50.0, wave_director.current_wave);
+                        enemy_vec.push(enemy);
+                        history.push("Spawned Interceptor".to_string());
+                    }
+                    "elite" => {
+                        let enemy = Enemy::new(EnemyType::Elite, screen_width() / 2.0, -50.0, wave_director.current_wave);
+                        enemy_vec.push(enemy);
+                        history.push("Spawned Elite".to_string());
+                    }
+                    "blowfish" | "twofish" | "rufus" | "rufusreverse" | "molly" | "mollyhashpass" | "davey" | "captaindavey" | "deadbeef" => {
+                        use crate::boss::BossType;
+                        let boss_type = match parts[1].to_lowercase().as_str() {
+                            "blowfish" => BossType::Blowfish,
+                            "twofish" => BossType::Twofish,
+                            "rufus" | "rufusreverse" => BossType::RufusReverse,
+                            "molly" | "mollyhashpass" => BossType::MollyHashpass,
+                            "davey" | "captaindavey" => BossType::CaptainDavey,
+                            _ => BossType::Deadbeef,
+                        };
+                        enemy_vec.clear();
+                        bullet_vec.clear();
+                        cannonball_vec.clear();
+                        pirate_vec.clear();
+                        *pirate_count = 0;
+                        wave_director.current_boss = Some(Boss::new(boss_type));
+                        wave_director.wave_state = WaveState::BossFight;
+                        wave_director.is_boss_wave = true;
+                        wave_director.current_wave = 99;
+                        history.push(format!("Spawned boss: {:?}", boss_type));
+                        return Some(GameState::Playing);
+                    }
+                    _ => {
+                        history.push("Unknown entity. Use: scout, fighter, bomber, interceptor, elite, or a boss name".to_string());
+                    }
+                }
             } else {
-                history.push("Usage: spawn <enemy_type>".to_string());
+                history.push("Usage: spawn <entity>".to_string());
             }
         }
         "killall" => {
@@ -976,9 +1051,67 @@ fn execute_console_command(
                     }
                 };
                 ship.apply_powerup(effect, 30.0);
+                let mgr = &mut wave_director.powerup_manager;
+                match effect {
+                    PowerupEffectType::RapidFire => mgr.rapid_fire_timer = 30.0,
+                    PowerupEffectType::SpreadShot => mgr.spread_shot_timer = 30.0,
+                    PowerupEffectType::Pierce => mgr.pierce_timer = 30.0,
+                    PowerupEffectType::Shield => mgr.has_shield = true,
+                }
                 history.push(format!("Gave powerup: {:?}", effect));
             } else {
                 history.push("Usage: powerup <type>".to_string());
+            }
+        }
+        "hitbox" => {
+            *debug_hitbox_visible = !*debug_hitbox_visible;
+            history.push(if *debug_hitbox_visible { "Hitbox overlay ON".to_string() } else { "Hitbox overlay OFF".to_string() });
+        }
+        "time" => {
+            if parts.len() > 1 {
+                if let Ok(scale) = parts[1].parse::<f32>() {
+                    *time_scale = scale.max(0.01).min(10.0);
+                    history.push(format!("Time scale set to {}", *time_scale));
+                } else {
+                    history.push("Invalid time scale".to_string());
+                }
+            } else {
+                history.push(format!("Current time scale: {}", *time_scale));
+            }
+        }
+        "state" => {
+            history.push(format!("Wave: {} | State: {:?} | Boss wave: {}", wave_director.current_wave, wave_director.wave_state, wave_director.is_boss_wave));
+            history.push(format!("Score: {} | Lives: {} | Pirate count: {}", game_score, lives, pirate_count));
+            history.push(format!("Ship: ({:.0}, {:.0}) | Shield: {} | Invuln: {:.1}s", ship.x, ship.y, ship.has_shield, ship.invuln_timer));
+            if let Some(boss) = &wave_director.current_boss {
+                history.push(format!("Boss: {} | HP: {}/{} | Phase: {:?} | Invuln: {}", boss.boss_type.name(), boss.health, boss.max_health, boss.phase, boss.invulnerable));
+            }
+            history.push(format!("Powerups: rapid_fire={:.1}s spread={:.1}s pierce={:.1}s shield={}", 
+                wave_director.powerup_manager.rapid_fire_timer,
+                wave_director.powerup_manager.spread_shot_timer,
+                wave_director.powerup_manager.pierce_timer,
+                wave_director.powerup_manager.has_shield,
+            ));
+        }
+        "damage" => {
+            if let Some(boss) = &mut wave_director.current_boss {
+                if parts.len() > 1 {
+                    if let Ok(dmg) = parts[1].parse::<i32>() {
+                        if boss.take_damage(dmg) {
+                            *game_score += 1000;
+                            wave_director.wave_state = WaveState::BossDefeated;
+                            history.push("Boss defeated!".to_string());
+                        } else {
+                            history.push(format!("Boss took {} damage. HP: {}/{}", dmg, boss.health, boss.max_health));
+                        }
+                    } else {
+                        history.push("Invalid damage amount".to_string());
+                    }
+                } else {
+                    history.push("Usage: damage <n>".to_string());
+                }
+            } else {
+                history.push("No boss active".to_string());
             }
         }
         "fps" => {
