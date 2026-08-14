@@ -1,7 +1,7 @@
 # Rusty Ship - Development Roadmap
 
 ```latex
-hackerz4 G\sqrt{oo}d
+hackerz4 G$\sqrt{oo}d
 ```
 
 ## Current State (v0.1.0)
