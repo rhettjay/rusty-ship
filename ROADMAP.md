@@ -1,5 +1,9 @@
 # Rusty Ship - Development Roadmap
 
+```latex
+hackerz4 G\sqrt{oo}d
+```
+
 ## Current State (v0.1.0)
 - Basic space shooter with ship, cannonballs, pirates
 - Main menu with Start/Settings/Quit
