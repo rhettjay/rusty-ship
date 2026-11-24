@@ -36,6 +36,10 @@ pub struct WaveDirector {
     pub powerup_manager: PowerUpManager,
     pub current_boss: Option<Boss>,
     pub is_boss_wave: bool,
+    /// Set when the completion transition fires; blocks re-firing until the
+    /// next start_wave. (Replaces main's old prev-wave-state guard, which
+    /// could not survive the delayed boss-defeat settle window.)
+    pub completion_fired: bool,
     /// High-water mark of simultaneous pirate minions, so "revive minions"
     /// can restore the roster to its recent size.
     minions_peak: usize,
@@ -55,6 +59,7 @@ impl WaveDirector {
             powerup_manager: PowerUpManager::new(),
             current_boss: None,
             is_boss_wave: false,
+            completion_fired: false,
             minions_peak: 0,
         }
     }
@@ -78,6 +83,7 @@ impl WaveDirector {
         self.enemies_spawned = 0;
         self.powerup_manager.powerups.clear();
         self.current_boss = None;
+        self.completion_fired = false;
         self.minions_peak = 0;
     }
 
@@ -111,6 +117,13 @@ impl WaveDirector {
         }
 
         self.wave_timer += dt;
+
+        // Boss fx tick even outside the fight itself (the death explosion
+        // animates during the BossDefeated settle window, and the beam
+        // telegraph counts down inside update_fx).
+        if let Some(boss) = self.current_boss.as_mut() {
+            boss.update_fx(dt, screen_height());
+        }
 
         // Dispatch on wave STATE, not the is_boss_wave flag: the bonus boss
         // (Deadbeef) is installed mid-regular-wave and must still simulate.
@@ -258,10 +271,11 @@ impl WaveDirector {
         pirate_vec.push(Pirate::new(x, 20.0, speed_x));
     }
 
-    /// Consumes the boss's minion signals (spawn / revive), which is what
-    /// makes Captain Davey's crew and Molly's revives actually appear.
-    /// `screen_w` is injected so tests can run without a GPU context.
-    pub fn drain_minion_signals(&mut self, pirate_vec: &mut Vec<Pirate>, screen_w: f32) {
+    /// Consumes the boss's one-shot signals — minion spawns/revives (which is
+    /// what makes Captain Davey's crew and Molly's revives actually appear)
+    /// and phase-transition powerup drops. `screen_w` is injected so tests
+    /// can run without a GPU context.
+    pub fn drain_boss_signals(&mut self, pirate_vec: &mut Vec<Pirate>, screen_w: f32) {
         let Some(boss) = &mut self.current_boss else {
             return;
         };
@@ -281,6 +295,15 @@ impl WaveDirector {
             while pirate_vec.len() < target {
                 Self::spawn_minion(pirate_vec, screen_w);
             }
+        }
+
+        // Phase transition: drop a powerup from the boss's position so the
+        // fight breaks tempo and the player has something to dive for.
+        if boss.check_phase_powerup_drop() {
+            boss.clear_phase_powerup_drop();
+            let drop_x = boss.x + boss.width / 2.0;
+            let drop_y = boss.y + boss.height;
+            self.powerup_manager.spawn_weighted(drop_x, drop_y);
         }
     }
 
@@ -463,10 +486,10 @@ mod tests {
             .insert("spawn_minions".to_string(), 1.0);
 
         let mut pirates: Vec<Pirate> = Vec::new();
-        wd.drain_minion_signals(&mut pirates, 800.0);
+        wd.drain_boss_signals(&mut pirates, 800.0);
         assert_eq!(pirates.len(), MINION_SPAWN_CAP);
         // Signal consumed — a second drain is a no-op.
-        wd.drain_minion_signals(&mut pirates, 800.0);
+        wd.drain_boss_signals(&mut pirates, 800.0);
         assert_eq!(pirates.len(), MINION_SPAWN_CAP);
     }
 
@@ -489,7 +512,29 @@ mod tests {
             .unwrap()
             .pattern_state
             .insert("revive_signal".to_string(), 1.0);
-        wd.drain_minion_signals(&mut pirates, 800.0);
+        wd.drain_boss_signals(&mut pirates, 800.0);
         assert_eq!(pirates.len(), 5); // 2 + min(3, 5-2) = restored to peak
+    }
+
+    /// A phase-transition signal drops exactly one powerup.
+    #[test]
+    fn test_drain_phase_drop_spawns_powerup() {
+        let mut wd = WaveDirector::new();
+        wd.start_wave(5);
+        wd.current_boss = Some(make_test_boss(150, 150));
+        assert!(wd.powerup_manager.powerups.is_empty());
+
+        wd.current_boss
+            .as_mut()
+            .unwrap()
+            .pattern_state
+            .insert("phase_powerup_drop".to_string(), 1.0);
+        let mut pirates: Vec<Pirate> = Vec::new();
+        wd.drain_boss_signals(&mut pirates, 800.0);
+
+        assert_eq!(wd.powerup_manager.powerups.len(), 1);
+        // One-shot: draining again spawns nothing more.
+        wd.drain_boss_signals(&mut pirates, 800.0);
+        assert_eq!(wd.powerup_manager.powerups.len(), 1);
     }
 }

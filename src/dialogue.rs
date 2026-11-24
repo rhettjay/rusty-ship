@@ -143,17 +143,32 @@ impl DialogueEngine {
         self.current_dialogue.as_ref()?;
 
         match self.state {
-            DialogueState::Typing { line_idx, .. } => {
+            DialogueState::Typing { line_idx, char_idx } => {
+                // Skip: SPACE/ENTER finishes the current line instantly.
+                if is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter) {
+                    self.state = DialogueState::WaitingForInput { line_idx };
+                    crate::audio::play_sfx("dialogue_blip");
+                    return None;
+                }
+
                 self.typewriter_timer += dt;
                 let chars_per_second = self.typewriter_speed as f64;
                 let target_chars = (self.typewriter_timer * chars_per_second) as usize;
 
                 if let Some(dialogue) = &self.current_dialogue {
                     if line_idx < dialogue.lines.len() {
-                        let line_text = &dialogue.lines[line_idx].text;
-                        if target_chars >= line_text.chars().count() {
+                        let line_len = dialogue.lines[line_idx].text.chars().count();
+                        if target_chars >= line_len {
                             self.state = DialogueState::WaitingForInput { line_idx };
                             crate::audio::play_sfx("dialogue_blip");
+                        } else if target_chars != char_idx {
+                            // Advance the rendered prefix so the line types
+                            // out visibly (char_idx was never updated before,
+                            // so lines rendered blank until finished).
+                            self.state = DialogueState::Typing {
+                                line_idx,
+                                char_idx: target_chars,
+                            };
                         }
                     }
                 }
@@ -472,5 +487,37 @@ mod tests {
             checked >= 10,
             "expected the full dialogue corpus, found {checked} files"
         );
+    }
+
+    /// The Typing state must render a progressively longer prefix — the
+    /// regression where char_idx never advanced made every line render
+    /// blank until it finished.
+    #[test]
+    fn test_typing_renders_prefix() {
+        let dialogue = DialogueData {
+            id: "test".to_string(),
+            character: Default::default(),
+            portrait: String::new(),
+            background_music: None,
+            lines: vec![DialogueLine {
+                text: "Hello, world!".to_string(),
+                character: Default::default(),
+                portrait: None,
+                emotion: None,
+            }],
+            choices: None,
+            on_complete: None,
+        };
+
+        let engine = DialogueEngine {
+            state: DialogueState::Typing {
+                line_idx: 0,
+                char_idx: 5,
+            },
+            current_dialogue: Some(dialogue),
+            ..DialogueEngine::new()
+        };
+        let text = engine.get_current_display_text(engine.current_dialogue.as_ref().unwrap());
+        assert_eq!(text, "Hello");
     }
 }

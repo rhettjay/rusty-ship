@@ -92,6 +92,8 @@ pub struct BossProjectile {
     pub color: Color,
     pub lifetime: f64,
     pub pattern: ProjectilePattern,
+    /// Deadbeef's thrown food draws as tumbling squares instead of circles.
+    pub food: bool,
 }
 
 impl BossProjectile {
@@ -132,6 +134,18 @@ const FPS_SCALE: f32 = 60.0;
 const ENTRY_SPEED: f32 = 120.0;
 /// Damage-debounce window after the boss takes a hit, seconds.
 const HIT_INVULN: f64 = 0.1;
+/// How long Davey's beam column telegraphs before firing, seconds.
+const BEAM_TELEGRAPH_TIME: f32 = 0.7;
+/// Post-defeat explosion duration, seconds.
+const DEATH_FX_TIME: f32 = 1.0;
+
+/// Davey's scanning beam telegraph: the column position is locked in, the
+/// beam fires when the timer expires.
+struct BeamTelegraph {
+    remaining: f32,
+    x: f32,
+    bullet: BulletDef,
+}
 
 pub struct Boss {
     pub boss_type: BossType,
@@ -156,6 +170,20 @@ pub struct Boss {
     pub sprite: Option<Texture2D>,
     pub color: Color,
     pub entry_anim: bool,
+    // --- visual fx (seconds remaining; 0 = inactive) ---
+    /// Phase-transition flash + shockwave ring.
+    pub phase_flash: f32,
+    /// Blowfish charge puff-up.
+    inflate_fx: f32,
+    /// Twofish mirrored ghost sprite.
+    mirror_fx: f32,
+    /// Rufus teleport chromatic glitch.
+    glitch_fx: f32,
+    /// Molly heal ring.
+    heal_fx: f32,
+    /// Post-defeat explosion countdown; the fight settles when it hits 0.
+    pub death_timer: f32,
+    beam_telegraph: Option<BeamTelegraph>,
 }
 
 impl Boss {
@@ -189,6 +217,13 @@ impl Boss {
             sprite: None,
             color: WHITE,
             entry_anim: true,
+            phase_flash: 0.0,
+            inflate_fx: 0.0,
+            mirror_fx: 0.0,
+            glitch_fx: 0.0,
+            heal_fx: 0.0,
+            death_timer: 0.0,
+            beam_telegraph: None,
         };
 
         boss.init_pattern_state();
@@ -292,6 +327,11 @@ impl Boss {
         if new_phase != self.phase {
             self.phase = new_phase;
             self.phase_timer = 0.0;
+            self.phase_flash = 0.5;
+            // Phase transitions drop a powerup — consumed by the wave
+            // director, which owns the powerup roster.
+            self.pattern_state
+                .insert("phase_powerup_drop".to_string(), 1.0);
             crate::audio::play_sfx("boss_laugh");
         }
         self.phase_timer += dt;
@@ -349,6 +389,7 @@ impl Boss {
                     if rand::gen_range(0, 100) < 2 {
                         self.x = rand::gen_range(100.0, screen_width() - self.width - 100.0);
                         self.y = rand::gen_range(50.0, 200.0);
+                        self.glitch_fx = 0.3;
                         self.pattern_state
                             .insert("teleport_cooldown".to_string(), *cooldown);
                     }
@@ -461,6 +502,7 @@ impl Boss {
             AttackDef::Heal { amount, chance } => {
                 if rng.gen::<f32>() < *chance {
                     self.health = (self.health + *amount).min(self.max_health);
+                    self.heal_fx = 0.8;
                 }
             }
             AttackDef::HealBeam {
@@ -473,6 +515,7 @@ impl Boss {
                     self.invuln_timer = *invuln as f64;
                     self.color = Color::new(0.0, 1.0, 0.0, 0.7);
                     self.health = (self.health + *amount).min(self.max_health);
+                    self.heal_fx = *invuln;
                 }
             }
             AttackDef::PoisonCloud {
@@ -506,7 +549,14 @@ impl Boss {
             }
             AttackDef::Beam { bullet, chance } => {
                 if rng.gen::<f32>() < *chance {
-                    self.scanning_beam(bullet, player_x);
+                    // Telegraph first: a full-height column at the player's
+                    // position flashes for BEAM_TELEGRAPH_TIME, THEN fires —
+                    // the beam is dodgeable instead of a guaranteed hit.
+                    self.beam_telegraph = Some(BeamTelegraph {
+                        remaining: BEAM_TELEGRAPH_TIME,
+                        x: player_x,
+                        bullet: bullet.clone(),
+                    });
                 }
             }
             AttackDef::ThrowFood { bullet, chance } => {
@@ -539,6 +589,7 @@ impl Boss {
             color: content::parse_color(&bullet.color),
             lifetime: bullet.lifetime,
             pattern: ProjectilePattern::from_key(&bullet.pattern),
+            food: false,
         }
     }
 
@@ -583,6 +634,7 @@ impl Boss {
         let (nx, ny) = (dx / dist, dy / dist);
 
         if mirror {
+            self.mirror_fx = 0.4;
             for i in 0..count {
                 let dir = if i % 2 == 0 { 1.0 } else { -1.0 };
                 let p =
@@ -630,6 +682,7 @@ impl Boss {
         self.invulnerable = true;
         self.invuln_timer = invuln as f64;
         self.color = RED;
+        self.inflate_fx = invuln;
     }
 
     fn poison_cloud(&mut self, count: u32, bullet: &BulletDef, player_x: f32, player_y: f32) {
@@ -651,6 +704,16 @@ impl Boss {
         self.pattern_state.insert("spawn_minions".to_string(), 1.0);
     }
 
+    /// True when a phase transition wants a powerup drop; one-shot.
+    pub fn check_phase_powerup_drop(&self) -> bool {
+        *self.pattern_state.get("phase_powerup_drop").unwrap_or(&0.0) > 0.0
+    }
+
+    pub fn clear_phase_powerup_drop(&mut self) {
+        self.pattern_state
+            .insert("phase_powerup_drop".to_string(), 0.0);
+    }
+
     pub fn check_revive_signal(&self) -> bool {
         *self.pattern_state.get("revive_signal").unwrap_or(&0.0) > 0.0
     }
@@ -667,9 +730,8 @@ impl Boss {
         self.pattern_state.insert("spawn_minions".to_string(), 0.0);
     }
 
-    fn scanning_beam(&mut self, bullet: &BulletDef, player_x: f32) {
-        let beam_x = player_x;
-        for y in (0..screen_height() as i32).step_by(20) {
+    fn scanning_beam(&mut self, bullet: &BulletDef, beam_x: f32, screen_h: f32) {
+        for y in (0..screen_h as i32).step_by(20) {
             let p = self.make_projectile(beam_x, y as f32, 0.0, 0.0, bullet);
             self.projectiles.push(p);
         }
@@ -717,6 +779,7 @@ impl Boss {
             bullet,
         );
         p.color = content::parse_color(color);
+        p.food = true;
         self.projectiles.push(p);
     }
 
@@ -736,6 +799,7 @@ impl Boss {
                 ),
                 lifetime: 10.0,
                 pattern: ProjectilePattern::Straight,
+                food: true,
             });
         }
     }
@@ -799,52 +863,283 @@ impl Boss {
     }
 
     pub fn draw(&self) {
-        if let Some(sprite) = &self.sprite {
-            draw_texture_ex(
-                sprite,
-                self.x,
-                self.y,
-                self.color,
-                DrawTextureParams {
-                    dest_size: Some(Vec2::new(self.width, self.height)),
-                    ..Default::default()
-                },
-            );
-        } else {
-            draw_rectangle(self.x, self.y, self.width, self.height, self.color);
+        if self.is_dead {
+            self.draw_death_explosion();
+            return;
         }
 
-        self.draw_health_bar();
+        self.draw_beam_telegraph();
+        self.draw_body();
+        self.draw_fx();
         self.draw_projectiles();
     }
 
-    fn draw_health_bar(&self) {
-        let bar_width = self.width;
-        let bar_height = 8.0;
-        let bar_x = self.x;
-        let bar_y = self.y - 15.0;
+    /// The post-defeat explosion: expanding shockwave rings plus radial
+    /// debris, ending in nothing (the boss is gone once the timer runs out).
+    fn draw_death_explosion(&self) {
+        let t = 1.0 - self.death_timer / DEATH_FX_TIME; // 0 -> 1
+        if t >= 1.0 {
+            return;
+        }
+        let cx = self.x + self.width / 2.0;
+        let cy = self.y + self.height / 2.0;
+        let fade = 1.0 - t;
 
-        draw_rectangle(
-            bar_x,
-            bar_y,
-            bar_width,
-            bar_height,
-            Color::new(0.2, 0.0, 0.0, 0.8),
-        );
-        let health_pct = self.health as f32 / self.max_health as f32;
-        draw_rectangle(bar_x, bar_y, bar_width * health_pct, bar_height, RED);
-        draw_rectangle_lines(bar_x, bar_y, bar_width, bar_height, 2.0, WHITE);
+        // Initial flash.
+        if t < 0.2 {
+            draw_circle(
+                cx,
+                cy,
+                self.width * (0.5 + t * 2.0),
+                Color::new(1.0, 1.0, 1.0, 0.6 * (1.0 - t / 0.2)),
+            );
+        }
 
-        let name = self.boss_type.name();
-        let name_x = self.x + self.width / 2.0 - measure_text(name, None, 16, 1.0).width / 2.0;
-        draw_text(name, name_x, bar_y - 5.0, 16.0, WHITE);
+        // Shockwave rings.
+        for ring in 0..2 {
+            let r = (t * 180.0) + ring as f32 * 40.0;
+            draw_circle_lines(cx, cy, r, 4.0, Color::new(1.0, 0.6, 0.1, fade));
+        }
+
+        // Radial debris, deterministic angles (golden-angle spacing).
+        for i in 0..12 {
+            let angle = i as f32 * 2.399963;
+            let dist = 20.0 + t * 160.0 * (if i % 2 == 0 { 1.0 } else { 0.6 });
+            let px = cx + angle.cos() * dist;
+            let py = cy + angle.sin() * dist;
+            draw_rectangle(
+                px - 3.0,
+                py - 3.0,
+                6.0,
+                6.0,
+                Color::new(1.0, 0.8, 0.2, fade),
+            );
+        }
     }
 
+    /// Davey's beam: a flashing red column at the locked-in position while
+    /// the telegraph counts down.
+    fn draw_beam_telegraph(&self) {
+        if let Some(x) = self.beam_telegraph_position() {
+            let pulse = (get_time() * 20.0).sin() * 0.5 + 0.5;
+            draw_rectangle(
+                x - 10.0,
+                0.0,
+                20.0,
+                screen_height(),
+                Color::new(1.0, 0.1, 0.1, 0.10 + 0.10 * pulse as f32),
+            );
+            draw_rectangle(
+                x - 2.0,
+                0.0,
+                4.0,
+                screen_height(),
+                Color::new(1.0, 0.3, 0.3, 0.6),
+            );
+        }
+    }
+
+    fn draw_body(&self) {
+        let scale = 1.0 + 0.3 * self.inflate_fx; // Blowfish charge puff-up
+        let w = self.width * scale;
+        let h = self.height * scale;
+        let x = self.x - (w - self.width) / 2.0; // keep centered
+        let y = self.y - (h - self.height) / 2.0;
+
+        if let Some(sprite) = &self.sprite {
+            draw_texture_ex(
+                sprite,
+                x,
+                y,
+                self.color,
+                DrawTextureParams {
+                    dest_size: Some(Vec2::new(w, h)),
+                    ..Default::default()
+                },
+            );
+
+            // Twofish mirror ghost: a flipped, transparent twin briefly
+            // appears during mirrored aimed attacks.
+            if self.mirror_fx > 0.0 {
+                let offset = 30.0 + self.mirror_fx * 40.0;
+                draw_texture_ex(
+                    sprite,
+                    x + offset,
+                    y,
+                    Color::new(1.0, 1.0, 1.0, self.mirror_fx),
+                    DrawTextureParams {
+                        dest_size: Some(Vec2::new(w, h)),
+                        flip_x: true,
+                        ..Default::default()
+                    },
+                );
+                draw_texture_ex(
+                    sprite,
+                    x - offset,
+                    y,
+                    Color::new(1.0, 1.0, 1.0, self.mirror_fx),
+                    DrawTextureParams {
+                        dest_size: Some(Vec2::new(w, h)),
+                        flip_x: true,
+                        ..Default::default()
+                    },
+                );
+            }
+
+            // Rufus teleport glitch: chromatic-aberration ghosts that decay.
+            if self.glitch_fx > 0.0 {
+                let jitter = 4.0 + self.glitch_fx * 16.0;
+                for (dx, tint) in [
+                    (jitter, Color::new(1.0, 0.2, 0.2, 0.5)),
+                    (-jitter, Color::new(0.2, 0.4, 1.0, 0.5)),
+                ] {
+                    draw_texture_ex(
+                        sprite,
+                        x + dx,
+                        y,
+                        tint,
+                        DrawTextureParams {
+                            dest_size: Some(Vec2::new(w, h)),
+                            ..Default::default()
+                        },
+                    );
+                }
+            }
+        } else {
+            draw_rectangle(x, y, w, h, self.color);
+        }
+    }
+
+    /// Per-boss effect overlays: phase flash + shockwave, Molly's heal ring.
+    fn draw_fx(&self) {
+        let cx = self.x + self.width / 2.0;
+        let cy = self.y + self.height / 2.0;
+
+        // Phase transition: white blink over the body plus an expanding ring.
+        if self.phase_flash > 0.0 {
+            let t = self.phase_flash / 0.5; // 1 -> 0
+            draw_rectangle(
+                self.x,
+                self.y,
+                self.width,
+                self.height,
+                Color::new(1.0, 1.0, 1.0, 0.35 * t),
+            );
+            draw_circle_lines(
+                cx,
+                cy,
+                (1.0 - t) * 140.0 + 20.0,
+                3.0,
+                Color::new(1.0, 0.9, 0.3, t),
+            );
+        }
+
+        // Molly's heal: pulsing green rings while regenerating.
+        if self.heal_fx > 0.0 {
+            let pulse = (get_time() * 8.0).sin() * 0.5 + 0.5;
+            let alpha = self.heal_fx.min(1.0);
+            for ring in 0..2 {
+                let r = self.width * (0.7 + ring as f32 * 0.25) + pulse as f32 * 8.0;
+                draw_circle_lines(
+                    cx,
+                    cy,
+                    r,
+                    3.0,
+                    Color::new(0.2, 1.0, 0.3, alpha * (0.5 + 0.3 * pulse as f32)),
+                );
+            }
+            // Small "+" above the boss to make "healing" unmistakable.
+            draw_text(
+                "+",
+                cx - 4.0,
+                self.y - 10.0,
+                30.0,
+                Color::new(0.2, 1.0, 0.3, alpha),
+            );
+        }
+    }
+
+    /// Projectile rendering keyed on pattern so each threat type reads at a
+    /// glance: homing pulses, bouncing stretches vertically, spirals trail,
+    /// food tumbles.
     fn draw_projectiles(&self) {
         for p in &self.projectiles {
-            draw_circle(p.x, p.y, p.size / 2.0, p.color);
-            draw_circle_lines(p.x, p.y, p.size / 2.0, 2.0, WHITE);
+            let r = p.size / 2.0;
+            match p.pattern {
+                ProjectilePattern::Homing => {
+                    let pulse = ((get_time() * 10.0).sin() * 0.5 + 0.5) as f32;
+                    draw_circle(p.x, p.y, r, p.color);
+                    draw_circle_lines(p.x, p.y, r + 3.0 + pulse * 3.0, 2.0, WHITE);
+                }
+                ProjectilePattern::Bounce => {
+                    let stretch = (p.vel_y / 300.0).clamp(-1.0, 1.0).abs();
+                    draw_ellipse(p.x, p.y, r, r * (1.0 + 0.4 * stretch), 0.0, p.color);
+                    draw_circle_lines(p.x, p.y, r, 2.0, WHITE);
+                }
+                ProjectilePattern::Spiral => {
+                    // Two fading trail circles behind the motion.
+                    for k in 1..=2 {
+                        let t = k as f32 * 0.04;
+                        draw_circle(
+                            p.x - p.vel_x * t,
+                            p.y - p.vel_y * t,
+                            r * (1.0 - 0.25 * k as f32),
+                            Color::new(p.color.r, p.color.g, p.color.b, 0.3),
+                        );
+                    }
+                    draw_circle(p.x, p.y, r, p.color);
+                    draw_circle_lines(p.x, p.y, r, 2.0, WHITE);
+                }
+                _ if p.food => {
+                    // Deadbeef's food fight: tumbling squares.
+                    draw_rectangle_ex(
+                        p.x - r,
+                        p.y - r,
+                        p.size,
+                        p.size,
+                        DrawRectangleParams {
+                            rotation: (p.x + p.y) * 0.02,
+                            color: p.color,
+                            ..Default::default()
+                        },
+                    );
+                }
+                _ => {
+                    draw_circle(p.x, p.y, r, p.color);
+                    draw_circle_lines(p.x, p.y, r, 2.0, WHITE);
+                }
+            }
         }
+    }
+
+    /// Ticks all visual/effect timers. Called by the wave director every
+    /// frame the boss exists (including after defeat, so the explosion
+    /// animates) — boss.update() only runs during the fight itself.
+    pub fn update_fx(&mut self, dt: f64, screen_h: f32) {
+        let dt = dt as f32;
+        self.phase_flash = (self.phase_flash - dt).max(0.0);
+        self.inflate_fx = (self.inflate_fx - dt).max(0.0);
+        self.mirror_fx = (self.mirror_fx - dt).max(0.0);
+        self.glitch_fx = (self.glitch_fx - dt).max(0.0);
+        self.heal_fx = (self.heal_fx - dt).max(0.0);
+        if self.is_dead && self.death_timer > 0.0 {
+            self.death_timer = (self.death_timer - dt).max(0.0);
+        }
+
+        // Beam telegraph countdown -> fire.
+        if let Some(mut telegraph) = self.beam_telegraph.take() {
+            telegraph.remaining -= dt;
+            if telegraph.remaining <= 0.0 {
+                self.scanning_beam(&telegraph.bullet, telegraph.x, screen_h);
+            } else {
+                self.beam_telegraph = Some(telegraph);
+            }
+        }
+    }
+
+    /// True while a beam telegraph column should be drawn, and its x.
+    pub fn beam_telegraph_position(&self) -> Option<f32> {
+        self.beam_telegraph.as_ref().map(|t| t.x)
     }
 
     /// Returns true if this damage killed the boss. The boss briefly becomes
@@ -862,6 +1157,7 @@ impl Boss {
         if self.health <= 0 {
             self.health = 0;
             self.is_dead = true;
+            self.death_timer = DEATH_FX_TIME;
             crate::audio::play_sfx("boss_defeat");
             return true;
         }
@@ -872,9 +1168,11 @@ impl Boss {
         (self.x, self.y, self.width, self.height)
     }
 
-    /// True when a hit would register (not invulnerable, not entering).
+    /// True when a hit would register (not invulnerable, not entering, and
+    /// still alive — bullets pass through a dying boss without spending
+    /// pierce charges).
     pub fn can_take_damage(&self) -> bool {
-        !self.invulnerable && !self.entry_anim
+        !self.invulnerable && !self.entry_anim && !self.is_dead
     }
 
     pub fn get_projectiles(&self) -> &[BossProjectile] {
@@ -932,6 +1230,13 @@ pub(crate) fn make_test_boss(health: i32, max_health: i32) -> Boss {
         sprite: None,
         color: WHITE,
         entry_anim: false,
+        phase_flash: 0.0,
+        inflate_fx: 0.0,
+        mirror_fx: 0.0,
+        glitch_fx: 0.0,
+        heal_fx: 0.0,
+        death_timer: 0.0,
+        beam_telegraph: None,
     }
 }
 
@@ -1052,5 +1357,94 @@ mod tests {
         assert!(boss.check_revive_signal());
         boss.clear_revive_signal();
         assert!(!boss.check_revive_signal());
+    }
+
+    /// Phase transitions set the powerup-drop signal exactly once per
+    /// transition.
+    #[test]
+    fn test_phase_change_drops_powerup_signal() {
+        let mut boss = make_boss(150, 150);
+        assert!(!boss.check_phase_powerup_drop());
+
+        // 40% health -> phase 2 transition.
+        boss.health = 60;
+        boss.update_phase(0.016);
+        assert!(boss.check_phase_powerup_drop());
+        boss.clear_phase_powerup_drop();
+        assert!(!boss.check_phase_powerup_drop());
+
+        // No transition on the next tick: no new signal.
+        boss.update_phase(0.016);
+        assert!(!boss.check_phase_powerup_drop());
+
+        // 10% health -> phase 3 transition: signal again.
+        boss.health = 15;
+        boss.update_phase(0.016);
+        assert!(boss.check_phase_powerup_drop());
+    }
+
+    /// Phase transitions also arm the visual flash.
+    #[test]
+    fn test_phase_change_sets_flash() {
+        let mut boss = make_boss(150, 150);
+        boss.health = 60;
+        boss.update_phase(0.016);
+        assert!(boss.phase_flash > 0.0);
+        boss.update_fx(1.0, 800.0);
+        assert_eq!(boss.phase_flash, 0.0);
+    }
+
+    /// Davey's beam telegraphs before firing: no instant projectiles, the
+    /// column position is locked in, and the beam spawns only when the
+    /// countdown expires.
+    #[test]
+    fn test_beam_telegraph_delays_fire() {
+        let mut boss = make_boss(500, 500);
+        let bullet = crate::content::BulletDef {
+            size: 12.0,
+            color: "red".to_string(),
+            pattern: "straight".to_string(),
+            lifetime: 3.0,
+            damage: 1,
+        };
+
+        boss.execute_attack(
+            &crate::content::AttackDef::Beam {
+                bullet: bullet.clone(),
+                chance: 1.0,
+            },
+            400.0,
+            600.0,
+        );
+        assert!(boss.projectiles.is_empty(), "beam must not fire instantly");
+        assert_eq!(boss.beam_telegraph_position(), Some(400.0));
+
+        // Halfway through the telegraph: still no beam.
+        boss.update_fx(0.3, 800.0);
+        assert!(boss.projectiles.is_empty());
+
+        // Countdown expires: the column fires at the locked position.
+        boss.update_fx(0.5, 800.0);
+        assert!(!boss.projectiles.is_empty());
+        assert_eq!(boss.beam_telegraph_position(), None);
+        for p in &boss.projectiles {
+            assert_eq!(p.x, 400.0);
+        }
+    }
+
+    /// Killing the boss arms the death explosion countdown, and it decays.
+    #[test]
+    fn test_death_timer() {
+        let mut boss = make_boss(10, 10);
+        assert!(boss.take_damage(10));
+        assert!(boss.is_dead);
+        assert!(boss.death_timer > 0.0);
+        // A dying boss cannot be damaged further.
+        assert!(!boss.can_take_damage());
+
+        boss.update_fx(0.5, 800.0);
+        assert!(boss.death_timer > 0.0);
+        boss.update_fx(0.6, 800.0);
+        assert_eq!(boss.death_timer, 0.0);
     }
 }

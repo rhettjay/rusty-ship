@@ -387,7 +387,6 @@ fn update_playing(
     }
 
     // Wave simulation.
-    let prev_wave_state = world.wave_director.wave_state;
     world.wave_director.update(
         dt,
         &mut world.enemies,
@@ -400,7 +399,7 @@ fn update_playing(
     // Boss minion signals (Captain Davey's crew, Molly's revives).
     world
         .wave_director
-        .drain_minion_signals(&mut world.pirates, screen_width());
+        .drain_boss_signals(&mut world.pirates, screen_width());
 
     // Enemy behavior and firing.
     let (ship_x, ship_y) = (world.ship.x, world.ship.y);
@@ -420,13 +419,10 @@ fn update_playing(
 
     check_collisions(world);
 
-    // Wave-completion transition (fires exactly once per completion).
-    let completed_now = world.wave_director.is_wave_complete()
-        && !matches!(
-            prev_wave_state,
-            WaveState::Complete | WaveState::BossDefeated
-        );
-    if completed_now {
+    // Wave-completion transition (fires exactly once per completion — the
+    // boss-defeat path waits for the death explosion to finish first).
+    if world.wave_director.is_wave_complete() {
+        world.wave_director.completion_fired = true;
         on_wave_complete(game, world, dialogue_engine);
     }
 
@@ -1241,6 +1237,16 @@ fn check_collisions(world: &mut World) {
         }
     }
 
+    // Boss body vs ship: ramming the boss hurts (2D movement makes this
+    // reachable, so it must be a real trade, not free damage).
+    if !ship_hit && ship.invuln_timer <= 0.0 && wave_director.wave_state == WaveState::BossFight {
+        if let Some(boss) = wave_director.current_boss.as_ref() {
+            if rects_overlap(boss.get_rect(), ship.get_rect()) {
+                ship_hit = true;
+            }
+        }
+    }
+
     if ship_hit {
         if wave_director.powerup_manager.has_shield {
             wave_director.powerup_manager.consume_shield();
@@ -1264,7 +1270,16 @@ fn check_collisions(world: &mut World) {
 /// Draws the (possibly frozen) game world. Used by every in-game state so
 /// the previously copy-pasted render blocks exist exactly once.
 fn draw_world(world: &World, game: &Game, assets: &Assets) {
-    draw_texture(&assets.background, 0.0, 0.0, WHITE);
+    // Screen shake during the first (loudest) part of a boss death
+    // explosion — implemented as a background offset since macroquad has no
+    // camera transform in this version.
+    let shake = world
+        .wave_director
+        .get_current_boss()
+        .filter(|b| b.is_dead && b.death_timer > 0.6)
+        .map(|_| (rand::gen_range(-6.0, 6.0), rand::gen_range(-6.0, 6.0)))
+        .unwrap_or((0.0, 0.0));
+    draw_texture(&assets.background, shake.0, shake.1, WHITE);
 
     for pirate in &world.pirates {
         pirate.draw(&assets.pirate);
@@ -1302,6 +1317,36 @@ fn draw_world(world: &World, game: &Game, assets: &Assets) {
     }
 
     world.wave_director.powerup_manager.draw_effect_indicators();
+
+    // Rufus Reverse's control-reversal zone: tint + pulsing border + label
+    // so the mechanic reads as intentional, not as a broken keyboard.
+    if world.wave_director.is_reverse_zone_active() {
+        let pulse = (get_time() * 6.0).sin() * 0.5 + 0.5;
+        draw_rectangle(
+            0.0,
+            0.0,
+            screen_width(),
+            screen_height(),
+            Color::new(0.5, 0.0, 0.8, 0.05),
+        );
+        draw_rectangle_lines(
+            4.0,
+            4.0,
+            screen_width() - 8.0,
+            screen_height() - 8.0,
+            5.0,
+            Color::new(0.7, 0.2, 1.0, 0.35 + 0.25 * pulse as f32),
+        );
+        let label = "< ! >  CONTROLS REVERSED  < ! >";
+        let lx = screen_width() * 0.5 - measure_text(label, None, 26, 1.0).width * 0.5;
+        draw_text(
+            label,
+            lx,
+            screen_height() - 60.0,
+            26.0,
+            Color::new(0.8, 0.4, 1.0, 0.6 + 0.4 * pulse as f32),
+        );
+    }
 
     if cfg!(debug_assertions) {
         draw_text(
@@ -1402,10 +1447,56 @@ fn draw_boss_health_bar(boss: &Boss) {
     let bar_height = 20.0;
     let x = screen_width() * 0.5 - bar_width * 0.5;
     let y = 20.0;
-
-    draw_rectangle(x, y, bar_width, bar_height, Color::new(0.2, 0.0, 0.0, 0.8));
     let health_pct = boss.health as f32 / boss.max_health as f32;
-    draw_rectangle(x, y, bar_width * health_pct, bar_height, RED);
+
+    // Segmented by phase thresholds so upcoming phase transitions (and
+    // their powerup drops) are legible. Segment color shifts toward yellow
+    // as the fight gets critical.
+    let phase_colors = [
+        RED,
+        Color::new(1.0, 0.45, 0.1, 1.0),
+        Color::new(1.0, 0.75, 0.2, 1.0),
+    ];
+    let edges: Vec<f32> = boss
+        .phases
+        .iter()
+        .map(|p| p.health_threshold)
+        .filter(|t| *t < 1.0)
+        .chain(std::iter::once(0.0))
+        .collect();
+
+    let mut hi = 1.0;
+    for (i, &lo) in edges.iter().enumerate() {
+        let span = (hi - lo).max(1e-6);
+        let filled = ((health_pct - lo) / span).clamp(0.0, 1.0);
+        let seg_x = x + bar_width * lo;
+        draw_rectangle(
+            seg_x,
+            y,
+            bar_width * span,
+            bar_height,
+            Color::new(0.15, 0.0, 0.0, 0.9),
+        );
+        if filled > 0.0 {
+            draw_rectangle(
+                seg_x,
+                y,
+                bar_width * span * filled,
+                bar_height,
+                phase_colors[i.min(2)],
+            );
+        }
+        if lo > 0.0 {
+            draw_rectangle(
+                x + bar_width * lo - 1.0,
+                y - 3.0,
+                2.0,
+                bar_height + 6.0,
+                WHITE,
+            );
+        }
+        hi = lo;
+    }
     draw_rectangle_lines(x, y, bar_width, bar_height, 2.0, WHITE);
 
     let name = boss.boss_type.name();
