@@ -27,6 +27,10 @@ pub struct EnemyArchetype {
 
 // ---- waves ---------------------------------------------------------------
 
+// Note: several fields below are parsed but not yet consumed by gameplay
+// (formation geometry, per-wave powerup_chance). They stay in the schema so
+// the JSON files remain forward-compatible.
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum FormationSpec {
@@ -34,6 +38,7 @@ pub enum FormationSpec {
     Detailed(DetailedFormation),
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DetailedFormation {
@@ -53,6 +58,7 @@ pub struct WaveDef {
     #[serde(default)]
     pub formations: Vec<FormationSpec>,
     #[serde(default)]
+    #[allow(dead_code)] // parsed for schema completeness; drops are enemy-driven today
     pub powerup_chance: f32,
     #[serde(default)]
     pub boss: Option<String>,
@@ -87,11 +93,25 @@ struct WavesFile {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MovementDef {
-    Patrol { speed_x: f32, base_y: f32, amp_y: f32, freq_y: f32 },
-    CenteredSway { amp_x: f32, freq_x: f32, base_y: f32, amp_y: f32, freq_y: f32 },
-    Teleport { cooldown: f32 },
+    Patrol {
+        speed_x: f32,
+        base_y: f32,
+        amp_y: f32,
+        freq_y: f32,
+    },
+    CenteredSway {
+        amp_x: f32,
+        freq_x: f32,
+        base_y: f32,
+        amp_y: f32,
+        freq_y: f32,
+    },
+    Teleport {
+        cooldown: f32,
+    },
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct BulletDef {
     pub size: f32,
@@ -246,6 +266,7 @@ pub struct BossPhaseDef {
     pub attacks: Vec<AttackDef>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct BossDef {
     pub name: String,
@@ -280,7 +301,12 @@ pub fn load() -> &'static Content {
         let ptr = CONTENT.load(Ordering::Acquire);
         if ptr.is_null() {
             let fresh = Box::into_raw(Box::new(load_content()));
-            match CONTENT.compare_exchange(std::ptr::null_mut(), fresh, Ordering::AcqRel, Ordering::Acquire) {
+            match CONTENT.compare_exchange(
+                std::ptr::null_mut(),
+                fresh,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => &*fresh,
                 Err(prev) => {
                     drop(Box::from_raw(fresh));
@@ -315,12 +341,16 @@ pub fn validate() -> Result<(), String> {
     for (wave_key, wave_def) in &c.waves {
         if let Some(boss_key) = &wave_def.boss {
             if !c.bosses.contains_key(boss_key) {
-                errors.push(format!("wave {wave_key}: boss \"{boss_key}\" is not defined in bosses.json"));
+                errors.push(format!(
+                    "wave {wave_key}: boss \"{boss_key}\" is not defined in bosses.json"
+                ));
             }
         }
         for enemy_key in wave_def.enemy_weights.keys() {
             if !c.enemies.contains_key(enemy_key) {
-                errors.push(format!("wave {wave_key}: enemy weight \"{enemy_key}\" is not defined in enemies.json"));
+                errors.push(format!(
+                    "wave {wave_key}: enemy weight \"{enemy_key}\" is not defined in enemies.json"
+                ));
             }
         }
         for spec in &wave_def.formations {
@@ -340,12 +370,18 @@ pub fn validate() -> Result<(), String> {
 }
 
 fn load_content() -> Content {
-    let enemies: BTreeMap<String, EnemyArchetype> =
-        load_file("assets/content/enemies.json", include_str!("../assets/content/enemies.json"));
-    let waves: WavesFile =
-        load_file("assets/content/waves.json", include_str!("../assets/content/waves.json"));
-    let bosses: BTreeMap<String, BossDef> =
-        load_file("assets/content/bosses.json", include_str!("../assets/content/bosses.json"));
+    let enemies: BTreeMap<String, EnemyArchetype> = load_file(
+        "assets/content/enemies.json",
+        include_str!("../assets/content/enemies.json"),
+    );
+    let waves: WavesFile = load_file(
+        "assets/content/waves.json",
+        include_str!("../assets/content/waves.json"),
+    );
+    let bosses: BTreeMap<String, BossDef> = load_file(
+        "assets/content/bosses.json",
+        include_str!("../assets/content/bosses.json"),
+    );
 
     Content {
         enemies,
@@ -356,7 +392,8 @@ fn load_content() -> Content {
 }
 
 fn load_content_from_disk() -> Result<Content, String> {
-    let enemies: BTreeMap<String, EnemyArchetype> = load_file_from_disk("assets/content/enemies.json")?;
+    let enemies: BTreeMap<String, EnemyArchetype> =
+        load_file_from_disk("assets/content/enemies.json")?;
     let waves: WavesFile = load_file_from_disk("assets/content/waves.json")?;
     let bosses: BTreeMap<String, BossDef> = load_file_from_disk("assets/content/bosses.json")?;
 
@@ -397,7 +434,10 @@ pub fn enemy(key: &str) -> Option<&'static EnemyArchetype> {
 
 /// Wave definition for `wave`, falling back to the default (endless) table.
 pub fn wave(wave: u32) -> &'static WaveDef {
-    load().waves.get(&wave.to_string()).unwrap_or(&load().default_wave)
+    load()
+        .waves
+        .get(&wave.to_string())
+        .unwrap_or(&load().default_wave)
 }
 
 pub fn boss(key: &str) -> Option<&'static BossDef> {
@@ -406,7 +446,10 @@ pub fn boss(key: &str) -> Option<&'static BossDef> {
 
 /// Boss key for the given wave, if that wave is a boss wave.
 pub fn boss_for_wave(wave: u32) -> Option<&'static str> {
-    load().waves.get(&wave.to_string()).and_then(|w| w.boss.as_deref())
+    load()
+        .waves
+        .get(&wave.to_string())
+        .and_then(|w| w.boss.as_deref())
 }
 
 // ---- color parsing -------------------------------------------------------
@@ -442,7 +485,10 @@ pub fn parse_color(s: &str) -> Color {
     }
 
     if let Some(rest) = s.strip_prefix("rgba(").and_then(|x| x.strip_suffix(')')) {
-        let parts: Vec<f32> = rest.split(',').filter_map(|p| p.trim().parse().ok()).collect();
+        let parts: Vec<f32> = rest
+            .split(',')
+            .filter_map(|p| p.trim().parse().ok())
+            .collect();
         if parts.len() == 4 {
             return Color::new(parts[0], parts[1], parts[2], parts[3]);
         }
@@ -515,12 +561,20 @@ mod tests {
 
     #[test]
     fn test_validate_passes_on_committed_content() {
-        assert!(validate().is_ok(), "validate() should pass: {}", validate().unwrap_err());
+        assert!(
+            validate().is_ok(),
+            "validate() should pass: {}",
+            validate().unwrap_err()
+        );
     }
 
     #[test]
     fn test_reload_reparses_disk_content() {
-        assert!(reload().is_ok(), "reload() should succeed: {}", reload().unwrap_err());
+        assert!(
+            reload().is_ok(),
+            "reload() should succeed: {}",
+            reload().unwrap_err()
+        );
         assert_eq!(load().waves["1"].max_enemies, 6);
         assert_eq!(load().bosses["blowfish"].max_health, 150);
         assert!(load().bosses.contains_key("captain_davey"));

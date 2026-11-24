@@ -26,12 +26,12 @@
   "choices": [
     {
       "text": "I'll adapt!",
-      "next_dialogue": "rufus_fight",
+      "next_dialogue_id": "rufus_fight",
       "callback": null
     },
     {
       "text": "This be sorcery!",
-      "next_dialogue": "rufus_taunt",
+      "next_dialogue_id": "rufus_taunt",
       "callback": null
     }
   ],

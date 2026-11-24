@@ -1,6 +1,6 @@
-use macroquad::prelude::*;
 use crate::content;
 use ::rand::Rng;
+use macroquad::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EnemyType {
@@ -34,14 +34,14 @@ impl EnemyType {
     }
 
     pub fn archetype(&self) -> &'static content::EnemyArchetype {
-        content::enemy(self.key()).unwrap_or_else(|| panic!("missing enemy archetype: {}", self.key()))
+        content::enemy(self.key())
+            .unwrap_or_else(|| panic!("missing enemy archetype: {}", self.key()))
     }
 
+    /// Asset file stem under assets/enemies/.
     pub fn sprite_name(&self) -> &'static str {
-        let sprite = &self.archetype().sprite;
-        match sprite.as_str() {
+        match self.archetype().sprite.as_str() {
             "scout" => "scout",
-            "fighter" => "fighter",
             "bomber" => "bomber",
             "interceptor" => "interceptor",
             _ => "fighter",
@@ -74,6 +74,12 @@ impl ShootPattern {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BehaviorState {
+    Entering,
+    Formation,
+}
+
 pub struct Enemy {
     pub enemy_type: EnemyType,
     pub hp: i32,
@@ -81,6 +87,7 @@ pub struct Enemy {
     pub armor: i32,
     pub x: f32,
     pub y: f32,
+    /// Pixels per second.
     pub speed_x: f32,
     pub speed_y: f32,
     pub color: Color,
@@ -93,37 +100,23 @@ pub struct Enemy {
     pub width: f32,
     pub height: f32,
     pub is_elite: bool,
-    pub formation_offset: Option<(f32, f32)>,
-    pub entry_anim: bool,
-    pub entry_target_y: f32,
     pub hit_flash: f64,
     pub behavior_state: BehaviorState,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BehaviorState {
-    Entering,
-    Formation,
-    Diving,
-    Returning,
-    Idle,
+    entry_target_y: f32,
 }
 
 impl Enemy {
     pub fn new(enemy_type: EnemyType, x: f32, y: f32, wave: u32) -> Self {
         let arch = enemy_type.archetype();
-        let base_hp = arch.base_hp;
-        let base_armor = arch.base_armor;
-        let hp_scaling = wave / 3;
-        let armor_scaling = wave / 5;
-
-        let hp = base_hp + hp_scaling as i32;
-        let armor = base_armor + armor_scaling as i32;
+        let hp = arch.base_hp + (wave / 3) as i32;
+        let armor = arch.base_armor + (wave / 5) as i32;
         let (width, height) = arch.size;
         let (min_speed, max_speed) = arch.speed_range;
         let mut rng = ::rand::thread_rng();
-        let speed_x = rng.gen_range(min_speed..max_speed) * if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
-        let speed_y = rng.gen_range(0.5..1.5);
+        // Content speeds are authored as pixels-per-frame at 60 fps.
+        let speed_x =
+            rng.gen_range(min_speed..max_speed) * 60.0 * if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
+        let speed_y = rng.gen_range(30.0..90.0);
 
         Self {
             enemy_type,
@@ -144,39 +137,17 @@ impl Enemy {
             width,
             height,
             is_elite: enemy_type.is_elite(),
-            formation_offset: None,
-            entry_anim: true,
-            entry_target_y: rng.gen_range(80.0..200.0),
             hit_flash: 0.0,
             behavior_state: BehaviorState::Entering,
+            entry_target_y: rng.gen_range(80.0..200.0),
         }
-    }
-
-    pub fn new_elite(enemy_type: EnemyType, x: f32, y: f32, wave: u32) -> Self {
-        let mut enemy = Self::new(enemy_type, x, y, wave);
-        enemy.is_elite = true;
-        enemy.color = GOLD;
-        enemy.hp = (enemy.hp as f32 * 1.5) as i32;
-        enemy.max_hp = enemy.hp;
-        enemy.armor += 2;
-        enemy.score_value = (enemy.score_value as f32 * 2.0) as i32;
-        enemy.powerup_chance *= 3.0;
-        
-        match enemy_type {
-            EnemyType::Fighter => enemy.shoot_pattern = ShootPattern::Spread,
-            EnemyType::Interceptor => enemy.shoot_pattern = ShootPattern::Aimed,
-            EnemyType::Bomber => enemy.shoot_pattern = ShootPattern::Bomb,
-            _ => enemy.shoot_pattern = ShootPattern::Straight,
-        }
-        enemy.shoot_interval *= 0.7;
-        enemy
     }
 
     pub fn take_damage(&mut self, damage: i32) -> bool {
         let actual_damage = (damage - self.armor).max(1);
         self.hp -= actual_damage;
         self.hit_flash = 0.15;
-        
+
         if self.hp <= 0 {
             self.hp = 0;
             self.is_dead = true;
@@ -185,95 +156,32 @@ impl Enemy {
         false
     }
 
-    pub fn update(&mut self, dt: f64, player_x: f32, player_y: f32) {
+    pub fn update(&mut self, dt: f64, _player_x: f32, _player_y: f32) {
+        let dt_f32 = dt as f32;
+
         if self.hit_flash > 0.0 {
             self.hit_flash -= dt;
         }
 
-        if self.entry_anim {
-            self.y += 2.0;
-            if self.y >= self.entry_target_y {
-                self.y = self.entry_target_y;
-                self.entry_anim = false;
-                self.behavior_state = BehaviorState::Formation;
-            }
-            return;
-        }
-
         match self.behavior_state {
+            BehaviorState::Entering => {
+                self.y += 120.0 * dt_f32;
+                if self.y >= self.entry_target_y {
+                    self.y = self.entry_target_y;
+                    self.behavior_state = BehaviorState::Formation;
+                }
+            }
             BehaviorState::Formation => {
-                self.update_formation_movement(dt);
+                self.x += self.speed_x * dt_f32;
+                self.y += (self.speed_y * dt_f32 * 0.5).sin() * 0.3;
+                if self.x <= self.width / 2.0 || self.x >= screen_width() - self.width / 2.0 {
+                    self.speed_x = -self.speed_x;
+                }
             }
-            BehaviorState::Diving => {
-                self.update_diving(dt, player_x, player_y);
-            }
-            BehaviorState::Returning => {
-                self.update_returning(dt);
-            }
-            BehaviorState::Idle => {
-                self.update_idle(dt);
-            }
-            _ => {}
         }
 
         self.shoot_timer += dt;
-        
-        if let Some(offset) = self.formation_offset {
-            let target_x = screen_width() / 2.0 + offset.0 - self.width / 2.0;
-            let target_y = 100.0 + offset.1;
-            let dx = target_x - self.x;
-            let dy = target_y - self.y;
-            let dist = (dx * dx + dy * dy).sqrt();
-            
-            if dist > 5.0 {
-                self.x += (dx / dist) * 2.0;
-                self.y += (dy / dist) * 2.0;
-            } else {
-                self.formation_offset = None;
-            }
-        }
-
         self.clamp_to_screen();
-    }
-
-    fn update_formation_movement(&mut self, dt: f64) {
-        self.x += self.speed_x * dt as f32;
-        self.y += (self.speed_y * dt as f32 * 0.5).sin() * 0.3;
-
-        if self.x <= self.width / 2.0 || self.x >= screen_width() - self.width / 2.0 {
-            self.speed_x = -self.speed_x;
-        }
-    }
-
-    fn update_diving(&mut self, dt: f64, player_x: f32, player_y: f32) {
-        let dx = player_x - self.x;
-        let dy = player_y - self.y;
-        let dist = (dx * dx + dy * dy).sqrt();
-        
-        if dist > 0.0 {
-            self.x += (dx / dist) * self.speed_x * dt as f32 * 1.5;
-            self.y += (dy / dist) * self.speed_y * dt as f32 * 1.5;
-        }
-
-        if self.y > screen_height() + 50.0 {
-            self.behavior_state = BehaviorState::Returning;
-        }
-    }
-
-    fn update_returning(&mut self, dt: f64) {
-        let target_y = self.entry_target_y;
-        let dy = target_y - self.y;
-        
-        if dy.abs() > 5.0 {
-            self.y += dy.signum() * self.speed_y * dt as f32;
-        } else {
-            self.y = target_y;
-            self.behavior_state = BehaviorState::Formation;
-        }
-    }
-
-    fn update_idle(&mut self, dt: f64) {
-        self.y += self.speed_y * dt as f32 * 0.5;
     }
 
     fn clamp_to_screen(&mut self) {
@@ -288,7 +196,7 @@ impl Enemy {
     }
 
     pub fn can_shoot(&self) -> bool {
-        self.shoot_timer >= self.shoot_interval && !self.entry_anim
+        self.shoot_timer >= self.shoot_interval && self.behavior_state == BehaviorState::Formation
     }
 
     pub fn reset_shoot_timer(&mut self) {
@@ -297,22 +205,24 @@ impl Enemy {
 
     pub fn get_shoot_direction(&self, player_x: f32, player_y: f32) -> (f32, f32) {
         match self.shoot_pattern {
-            ShootPattern::Straight => (0.0, 1.0),
             ShootPattern::Aimed => {
                 let dx = player_x - self.x;
                 let dy = player_y - self.y;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist > 0.0 { (dx / dist, dy / dist) } else { (0.0, 1.0) }
+                if dist > 0.0 {
+                    (dx / dist, dy / dist)
+                } else {
+                    (0.0, 1.0)
+                }
             }
-            ShootPattern::Bomb => (0.0, 1.0),
-            ShootPattern::Spread => (0.0, 1.0),
             ShootPattern::None => (0.0, 0.0),
+            _ => (0.0, 1.0),
         }
     }
 
     pub fn draw(&self, texture: Option<&Texture2D>) {
         let mut draw_color = self.color;
-        
+
         if self.hit_flash > 0.0 {
             draw_color = WHITE;
         } else if self.is_elite {
@@ -334,7 +244,7 @@ impl Enemy {
                 DrawTextureParams {
                     dest_size: Some(Vec2::new(self.width, self.height)),
                     ..Default::default()
-                }
+                },
             );
         } else {
             draw_rectangle(
@@ -356,7 +266,7 @@ impl Enemy {
         let bar_h = 4.0;
         let x = self.x - bar_w / 2.0;
         let y = self.y - self.height / 2.0 - 8.0;
-        
+
         draw_rectangle(x, y, bar_w, bar_h, Color::new(0.2, 0.0, 0.0, 0.8));
         let pct = self.hp as f32 / self.max_hp as f32;
         draw_rectangle(x, y, bar_w * pct, bar_h, RED);
@@ -407,12 +317,9 @@ pub fn select_enemy_type(wave: u32, rng: &mut impl Rng) -> EnemyType {
     let weights = get_spawn_weights(wave);
     let total: f32 = weights.iter().map(|(_, w)| *w).sum();
     let mut roll = rng.gen_range(0.0..total);
-    
+
     for (enemy_type, weight) in weights {
         if roll <= weight {
-            if enemy_type == EnemyType::Elite && rng.gen_bool(0.3) {
-                return EnemyType::Elite;
-            }
             return enemy_type;
         }
         roll -= weight;

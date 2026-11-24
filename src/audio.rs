@@ -1,10 +1,9 @@
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
 use std::collections::HashMap;
-use std::sync::{OnceLock, Mutex};
+use std::sync::{Mutex, OnceLock};
 
 struct MusicTrack {
-    name: String,
     sound: Option<Sound>,
     playing: bool,
 }
@@ -47,11 +46,13 @@ impl AudioManager {
             if let Ok(bytes) = std::fs::read(path) {
                 if !bytes.is_empty() {
                     let _ = load_sound_from_bytes(&bytes).await.map(|sound| {
-                        self.music_tracks.insert(name.to_string(), MusicTrack {
-                            name: name.to_string(),
-                            sound: Some(sound),
-                            playing: false,
-                        });
+                        self.music_tracks.insert(
+                            name.to_string(),
+                            MusicTrack {
+                                sound: Some(sound),
+                                playing: false,
+                            },
+                        );
                     });
                 }
             }
@@ -106,16 +107,6 @@ impl AudioManager {
         self.fade_target = None;
     }
 
-    pub fn stop_music(&mut self) {
-        if let Some(current) = &self.current_music {
-            if let Some(track) = self.music_tracks.get_mut(current) {
-                track.playing = false;
-            }
-        }
-        self.current_music = None;
-        self.fade_target = None;
-    }
-
     pub fn play_sfx(&self, name: &str) {
         if let Some(sound) = self.sfx.get(name) {
             play_sound_once(sound);
@@ -134,7 +125,7 @@ impl AudioManager {
         if let Some(target) = self.fade_target.clone() {
             self.fade_timer += dt;
             let progress = (self.fade_timer / self.fade_duration).min(1.0);
-            
+
             if progress >= 1.0 {
                 self.play_music_immediate(&target);
             }
