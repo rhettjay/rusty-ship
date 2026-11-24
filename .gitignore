@@ -3,3 +3,4 @@ target
 # Session logs (never version-controlled)
 session*.md
 *.bin
+.DS_Store

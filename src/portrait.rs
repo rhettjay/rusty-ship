@@ -37,17 +37,21 @@ impl PortraitManager {
 
     fn create_placeholder(&self, name: &str) -> Texture2D {
         let size = 128;
-        let mut image = Image::gen_image_color(size, size, match name {
-            "captain_davey_portscan" => RED,
-            "blowfish" => ORANGE,
-            "twofish" => BLUE,
-            "rufus_reverse" => PURPLE,
-            "molly_hashpass" => PINK,
-            "deadbeef" => GREEN,
-            _ => GRAY,
-        });
-        
-        let mut texture = Texture2D::from_image(&image);
+        let image = Image::gen_image_color(
+            size,
+            size,
+            match name {
+                "captain_davey_portscan" => RED,
+                "blowfish" => ORANGE,
+                "twofish" => BLUE,
+                "rufus_reverse" => PURPLE,
+                "molly_hashpass" => PINK,
+                "deadbeef" => GREEN,
+                _ => GRAY,
+            },
+        );
+
+        let texture = Texture2D::from_image(&image);
         texture.set_filter(FilterMode::Nearest);
         texture
     }
@@ -61,7 +65,9 @@ impl PortraitManager {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize, Default)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize, Default,
+)]
 #[serde(rename_all = "PascalCase")]
 pub enum Character {
     #[default]
@@ -75,19 +81,6 @@ pub enum Character {
 }
 
 impl Character {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "captain_davey" | "captaindavey" | "davey" => Some(Character::CaptainDavey),
-            "blowfish" => Some(Character::Blowfish),
-            "twofish" => Some(Character::Twofish),
-            "rufus_reverse" | "rufusreverse" => Some(Character::RufusReverse),
-            "molly_hashpass" | "mollyhashpass" => Some(Character::MollyHashpass),
-            "deadbeef" => Some(Character::Deadbeef),
-            "narrator" => Some(Character::Narrator),
-            _ => None,
-        }
-    }
-
     pub fn portrait_filename(&self) -> &'static str {
         match self {
             Character::CaptainDavey => "captain_davey_portscan",

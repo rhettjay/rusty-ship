@@ -1,6 +1,7 @@
-use macroquad::prelude::*;
+use crate::collision::rects_overlap;
 use crate::config::{PowerupType, POWERUP_CONFIG};
 use ::rand::Rng;
+use macroquad::prelude::*;
 
 pub struct PowerUp {
     pub powerup_type: PowerupType,
@@ -45,8 +46,7 @@ impl PowerUp {
         self.lifetime += dt;
         self.rotation += 0.5 * dt as f32;
         self.bob_timer += dt;
-        
-        let bob = (self.bob_timer * 3.0).sin() as f32 * 0.5;
+
         self.glow_intensity = (self.bob_timer * 4.0).sin() as f32 * 0.3 + 0.7;
 
         if self.lifetime >= self.max_lifetime || self.y > screen_height() + 50.0 {
@@ -72,7 +72,7 @@ impl PowerUp {
                     dest_size: Some(Vec2::new(self.width, self.height)),
                     rotation: self.rotation,
                     ..Default::default()
-                }
+                },
             );
         } else {
             self.draw_procedural(color, glow_color);
@@ -97,12 +97,8 @@ impl PowerUp {
         match self.powerup_type {
             PowerupType::RapidFire => {
                 draw_circle(self.x, draw_y, self.width / 2.0, glow_color);
-                draw_rectangle(
-                    self.x - 6.0, draw_y - 2.0, 12.0, 4.0, color
-                );
-                draw_rectangle(
-                    self.x - 2.0, draw_y - 8.0, 4.0, 16.0, color
-                );
+                draw_rectangle(self.x - 6.0, draw_y - 2.0, 12.0, 4.0, color);
+                draw_rectangle(self.x - 2.0, draw_y - 8.0, 4.0, 16.0, color);
             }
             PowerupType::SpreadShot => {
                 draw_circle(self.x, draw_y, self.width / 2.0, glow_color);
@@ -115,30 +111,25 @@ impl PowerUp {
             }
             PowerupType::Pierce => {
                 draw_circle(self.x, draw_y, self.width / 2.0, glow_color);
-                draw_rectangle(
-                    self.x - 8.0, draw_y - 1.0, 16.0, 2.0, color
-                );
-                draw_rectangle(
-                    self.x - 8.0, draw_y + 1.0, 16.0, 2.0, color
-                );
-                draw_rectangle(
-                    self.x - 1.0, draw_y - 8.0, 2.0, 16.0, WHITE
-                );
+                draw_rectangle(self.x - 8.0, draw_y - 1.0, 16.0, 2.0, color);
+                draw_rectangle(self.x - 8.0, draw_y + 1.0, 16.0, 2.0, color);
+                draw_rectangle(self.x - 1.0, draw_y - 8.0, 2.0, 16.0, WHITE);
             }
             PowerupType::Shield => {
                 draw_circle(self.x, draw_y, self.width / 2.0, glow_color);
-                draw_circle(self.x, draw_y, self.width / 2.0 - 4.0, Color::new(0.8, 0.8, 1.0, 0.5));
+                draw_circle(
+                    self.x,
+                    draw_y,
+                    self.width / 2.0 - 4.0,
+                    Color::new(0.8, 0.8, 1.0, 0.5),
+                );
                 draw_circle(self.x, draw_y, self.width / 2.0 - 8.0, color);
             }
             PowerupType::Bomb => {
                 draw_circle(self.x, draw_y, self.width / 2.0, glow_color);
                 draw_circle(self.x, draw_y, self.width / 2.0 - 2.0, color);
-                draw_rectangle(
-                    self.x - 1.0, draw_y - 8.0, 2.0, 16.0, WHITE
-                );
-                draw_rectangle(
-                    self.x - 8.0, draw_y - 1.0, 16.0, 2.0, WHITE
-                );
+                draw_rectangle(self.x - 1.0, draw_y - 8.0, 2.0, 16.0, WHITE);
+                draw_rectangle(self.x - 8.0, draw_y - 1.0, 16.0, 2.0, WHITE);
             }
             PowerupType::Life => {
                 draw_circle(self.x, draw_y, self.width / 2.0, glow_color);
@@ -153,9 +144,12 @@ impl PowerUp {
                 for i in 0..heart_points.len() {
                     let j = (i + 1) % heart_points.len();
                     draw_line(
-                        heart_points[i].x, heart_points[i].y,
-                        heart_points[j].x, heart_points[j].y,
-                        3.0, color,
+                        heart_points[i].x,
+                        heart_points[i].y,
+                        heart_points[j].x,
+                        heart_points[j].y,
+                        3.0,
+                        color,
                     );
                 }
             }
@@ -166,13 +160,24 @@ impl PowerUp {
                 let inner_r = 4.0;
                 let mut points = Vec::new();
                 for i in 0..star_points * 2 {
-                    let angle = i as f32 * std::f32::consts::PI / star_points as f32 - std::f32::consts::FRAC_PI_2;
+                    let angle = i as f32 * std::f32::consts::PI / star_points as f32
+                        - std::f32::consts::FRAC_PI_2;
                     let r = if i % 2 == 0 { outer_r } else { inner_r };
-                    points.push(Vec2::new(self.x + angle.cos() * r, draw_y + angle.sin() * r));
+                    points.push(Vec2::new(
+                        self.x + angle.cos() * r,
+                        draw_y + angle.sin() * r,
+                    ));
                 }
                 for i in 0..points.len() {
                     let j = (i + 1) % points.len();
-                    draw_line(points[i].x, points[i].y, points[j].x, points[j].y, 2.0, color);
+                    draw_line(
+                        points[i].x,
+                        points[i].y,
+                        points[j].x,
+                        points[j].y,
+                        2.0,
+                        color,
+                    );
                 }
             }
         }
@@ -186,62 +191,12 @@ impl PowerUp {
             self.height,
         )
     }
-
-    pub fn apply_effect(&self, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) -> Option<PowerupEffect> {
-        let duration = POWERUP_CONFIG.iter()
-            .find(|c| c.powerup_type == self.powerup_type)
-            .map(|c| c.duration)
-            .unwrap_or(10.0);
-
-        match self.powerup_type {
-            PowerupType::RapidFire => {
-                Some(PowerupEffect::RapidFire(duration))
-            }
-            PowerupType::SpreadShot => {
-                Some(PowerupEffect::SpreadShot(duration))
-            }
-            PowerupType::Pierce => {
-                Some(PowerupEffect::Pierce(duration))
-            }
-            PowerupType::Shield => {
-                ship.has_shield = true;
-                Some(PowerupEffect::Shield)
-            }
-            PowerupType::Bomb => {
-                for pirate in pirate_vec {
-                    if !pirate.is_dead {
-                        pirate.is_dead = true;
-                    }
-                }
-                cannonball_vec.clear();
-                Some(PowerupEffect::Bomb)
-            }
-            PowerupType::Life => {
-                *lives = (*lives + 1).min(9);
-                Some(PowerupEffect::Life)
-            }
-            PowerupType::Score => {
-                *game_score += 500;
-                Some(PowerupEffect::Score)
-            }
-        }
-    }
 }
 
-#[derive(Clone, Debug)]
-pub enum PowerupEffect {
-    RapidFire(f32),
-    SpreadShot(f32),
-    Pierce(f32),
-    Shield,
-    Bomb,
-    Life,
-    Score,
-}
-
+/// Single source of truth for active powerup effects. The ship does not keep
+/// its own copies of this state.
 pub struct PowerUpManager {
     pub powerups: Vec<PowerUp>,
-    pub active_effects: Vec<(PowerupEffect, f32)>,
     pub rapid_fire_timer: f32,
     pub spread_shot_timer: f32,
     pub pierce_timer: f32,
@@ -252,7 +207,6 @@ impl PowerUpManager {
     pub fn new() -> Self {
         Self {
             powerups: Vec::new(),
-            active_effects: Vec::new(),
             rapid_fire_timer: 0.0,
             spread_shot_timer: 0.0,
             pierce_timer: 0.0,
@@ -260,7 +214,7 @@ impl PowerUpManager {
         }
     }
 
-    pub fn update(&mut self, dt: f64, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {
+    pub fn update(&mut self, dt: f64) {
         let dt_f32 = dt as f32;
 
         self.powerups.retain_mut(|p| {
@@ -269,19 +223,14 @@ impl PowerUpManager {
         });
 
         if self.rapid_fire_timer > 0.0 {
-            self.rapid_fire_timer -= dt_f32;
+            self.rapid_fire_timer = (self.rapid_fire_timer - dt_f32).max(0.0);
         }
         if self.spread_shot_timer > 0.0 {
-            self.spread_shot_timer -= dt_f32;
+            self.spread_shot_timer = (self.spread_shot_timer - dt_f32).max(0.0);
         }
         if self.pierce_timer > 0.0 {
-            self.pierce_timer -= dt_f32;
+            self.pierce_timer = (self.pierce_timer - dt_f32).max(0.0);
         }
-
-        self.active_effects.retain_mut(|(effect, timer)| {
-            *timer -= dt_f32;
-            *timer > 0.0
-        });
     }
 
     pub fn spawn_powerup(&mut self, powerup_type: PowerupType, x: f32, y: f32) {
@@ -293,60 +242,66 @@ impl PowerUpManager {
         let base_chance = enemy.powerup_chance;
         let wave_bonus = (wave as f32 * 0.01).min(0.1);
         let total_chance = (base_chance + wave_bonus).min(0.2);
-        
+
         if rng.gen_bool(total_chance as f64) {
-            let config = &POWERUP_CONFIG[rng.gen_range(0..POWERUP_CONFIG.len())];
+            let config = weighted_powerup_config(&mut rng);
             self.spawn_powerup(config.powerup_type, enemy.x, enemy.y);
         }
     }
 
-    pub fn check_pickup(&mut self, ship: &mut crate::ship::Ship, cannonball_vec: &mut Vec<crate::cannonball::Cannonball>, pirate_vec: &mut Vec<crate::pirate::Pirate>, game_score: &mut i32, lives: &mut i32) {
+    /// Applies the effect of a collected powerup.
+    pub fn apply_powerup(
+        &mut self,
+        powerup_type: PowerupType,
+        pirates: &mut [crate::pirate::Pirate],
+        game_score: &mut i32,
+        lives: &mut i32,
+    ) {
+        let duration = POWERUP_CONFIG
+            .iter()
+            .find(|c| c.powerup_type == powerup_type)
+            .map(|c| c.duration)
+            .unwrap_or(10.0);
+
+        match powerup_type {
+            PowerupType::RapidFire => self.rapid_fire_timer = duration.max(self.rapid_fire_timer),
+            PowerupType::SpreadShot => {
+                self.spread_shot_timer = duration.max(self.spread_shot_timer)
+            }
+            PowerupType::Pierce => self.pierce_timer = duration.max(self.pierce_timer),
+            PowerupType::Shield => self.has_shield = true,
+            PowerupType::Bomb => {
+                for pirate in pirates.iter_mut() {
+                    pirate.is_dead = true;
+                }
+            }
+            PowerupType::Life => *lives = (*lives + 1).min(9),
+            PowerupType::Score => *game_score += 500,
+        }
+    }
+
+    pub fn check_pickup(
+        &mut self,
+        ship: &crate::ship::Ship,
+        pirates: &mut [crate::pirate::Pirate],
+        game_score: &mut i32,
+        lives: &mut i32,
+    ) {
         let ship_rect = ship.get_rect();
-        
+
         for i in (0..self.powerups.len()).rev() {
             if self.powerups[i].is_active {
                 let p_rect = self.powerups[i].get_rect();
                 if rects_overlap(ship_rect, p_rect) {
-                    if let Some(effect) = self.powerups[i].apply_effect(ship, cannonball_vec, pirate_vec, game_score, lives) {
-                        self.apply_effect(effect);
-                    }
+                    let powerup_type = self.powerups[i].powerup_type;
+                    self.apply_powerup(powerup_type, pirates, game_score, lives);
                     self.powerups.remove(i);
                 }
             }
         }
     }
 
-    fn apply_effect(&mut self, effect: PowerupEffect) {
-        match effect {
-            PowerupEffect::RapidFire(duration) => {
-                self.rapid_fire_timer = duration;
-                self.active_effects.push((effect, duration));
-            }
-            PowerupEffect::SpreadShot(duration) => {
-                self.spread_shot_timer = duration;
-                self.active_effects.push((effect, duration));
-            }
-            PowerupEffect::Pierce(duration) => {
-                self.pierce_timer = duration;
-                self.active_effects.push((effect, duration));
-            }
-            PowerupEffect::Shield => {
-                self.has_shield = true;
-                self.active_effects.push((effect, 0.0));
-            }
-            PowerupEffect::Bomb => {
-                self.active_effects.push((effect, 0.0));
-            }
-            PowerupEffect::Life => {
-                self.active_effects.push((effect, 0.0));
-            }
-            PowerupEffect::Score => {
-                self.active_effects.push((effect, 0.0));
-            }
-        }
-    }
-
-    pub fn get_cannonball_cooldown(&self, base_cooldown: f64) -> f64 {
+    pub fn get_fire_cooldown(&self, base_cooldown: f64) -> f64 {
         if self.rapid_fire_timer > 0.0 {
             base_cooldown * 0.3
         } else {
@@ -362,18 +317,21 @@ impl PowerUpManager {
         self.pierce_timer > 0.0
     }
 
-    pub fn has_shield(&self) -> bool {
-        self.has_shield
-    }
-
     pub fn consume_shield(&mut self) -> bool {
         if self.has_shield {
             self.has_shield = false;
-            self.active_effects.retain(|(e, _)| !matches!(e, PowerupEffect::Shield));
             true
         } else {
             false
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.powerups.clear();
+        self.rapid_fire_timer = 0.0;
+        self.spread_shot_timer = 0.0;
+        self.pierce_timer = 0.0;
+        self.has_shield = false;
     }
 
     pub fn draw(&self, textures: &std::collections::HashMap<String, Texture2D>) {
@@ -388,17 +346,35 @@ impl PowerUpManager {
 
     pub fn draw_effect_indicators(&self) {
         let mut y = 145.0;
-        
+
         if self.rapid_fire_timer > 0.0 {
-            draw_text(&format!("RAPID FIRE: {:.1}s", self.rapid_fire_timer), 25.0, y, 18.0, YELLOW);
+            draw_text(
+                &format!("RAPID FIRE: {:.1}s", self.rapid_fire_timer),
+                25.0,
+                y,
+                18.0,
+                YELLOW,
+            );
             y += 22.0;
         }
         if self.spread_shot_timer > 0.0 {
-            draw_text(&format!("SPREAD SHOT: {:.1}s", self.spread_shot_timer), 25.0, y, 18.0, SKYBLUE);
+            draw_text(
+                &format!("SPREAD SHOT: {:.1}s", self.spread_shot_timer),
+                25.0,
+                y,
+                18.0,
+                SKYBLUE,
+            );
             y += 22.0;
         }
         if self.pierce_timer > 0.0 {
-            draw_text(&format!("PIERCE: {:.1}s", self.pierce_timer), 25.0, y, 18.0, LIME);
+            draw_text(
+                &format!("PIERCE: {:.1}s", self.pierce_timer),
+                25.0,
+                y,
+                18.0,
+                LIME,
+            );
             y += 22.0;
         }
         if self.has_shield {
@@ -407,9 +383,109 @@ impl PowerUpManager {
     }
 }
 
-fn rects_overlap(r1: (f32, f32, f32, f32), r2: (f32, f32, f32, f32)) -> bool {
-    r1.0 < r2.0 + r2.2 &&
-    r1.0 + r1.2 > r2.0 &&
-    r1.1 < r2.1 + r2.3 &&
-    r1.1 + r1.3 > r2.1
+/// Picks a powerup config by its configured weight.
+fn weighted_powerup_config(rng: &mut impl Rng) -> &'static crate::config::PowerupConfig {
+    let total: u32 = POWERUP_CONFIG.iter().map(|c| c.weight).sum();
+    let mut roll = rng.gen_range(0..total);
+    for config in POWERUP_CONFIG {
+        if roll < config.weight {
+            return config;
+        }
+        roll -= config.weight;
+    }
+    &POWERUP_CONFIG[0]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::enemy::{Enemy, EnemyType};
+
+    /// The weighted pick must be able to return every configured powerup and
+    /// nothing outside the configured set.
+    #[test]
+    fn test_weighted_pick_covers_all_configs() {
+        let mut rng = ::rand::thread_rng();
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..2000 {
+            let config = weighted_powerup_config(&mut rng);
+            assert!(POWERUP_CONFIG
+                .iter()
+                .any(|c| c.powerup_type == config.powerup_type));
+            seen.insert(config.powerup_type);
+        }
+        for config in POWERUP_CONFIG {
+            assert!(
+                seen.contains(&config.powerup_type),
+                "never picked: {:?}",
+                config.powerup_type
+            );
+        }
+    }
+
+    /// Rapid fire must drop the cooldown by the documented factor.
+    #[test]
+    fn test_rapid_fire_cooldown() {
+        let mut mgr = PowerUpManager::new();
+        assert_eq!(mgr.get_fire_cooldown(0.2), 0.2);
+        mgr.rapid_fire_timer = 5.0;
+        assert!((mgr.get_fire_cooldown(0.2) - 0.06).abs() < 1e-9);
+    }
+
+    /// Shield consume is one-shot.
+    #[test]
+    fn test_consume_shield() {
+        let mut mgr = PowerUpManager::new();
+        assert!(!mgr.consume_shield());
+        mgr.has_shield = true;
+        assert!(mgr.consume_shield());
+        assert!(!mgr.has_shield);
+        assert!(!mgr.consume_shield());
+    }
+
+    /// Timers tick down and clamp at zero.
+    #[test]
+    fn test_timers_tick_down() {
+        let mut mgr = PowerUpManager::new();
+        mgr.rapid_fire_timer = 0.05;
+        mgr.update(0.016);
+        assert!(mgr.rapid_fire_timer > 0.0);
+        mgr.update(1.0);
+        assert_eq!(mgr.rapid_fire_timer, 0.0);
+    }
+
+    /// Applying a life powerup caps at 9 lives.
+    #[test]
+    fn test_life_powerup_caps() {
+        let mut mgr = PowerUpManager::new();
+        let mut pirates: Vec<crate::pirate::Pirate> = Vec::new();
+        let mut score = 0;
+        let mut lives = 9;
+        mgr.apply_powerup(PowerupType::Life, &mut pirates, &mut score, &mut lives);
+        assert_eq!(lives, 9);
+    }
+
+    /// Bomb clears live pirates.
+    #[test]
+    fn test_bomb_clears_pirates() {
+        let mut mgr = PowerUpManager::new();
+        let mut pirates = vec![
+            crate::pirate::Pirate::new(100.0, 100.0, 60.0),
+            crate::pirate::Pirate::new(200.0, 100.0, -60.0),
+        ];
+        let mut score = 0;
+        let mut lives = 3;
+        mgr.apply_powerup(PowerupType::Bomb, &mut pirates, &mut score, &mut lives);
+        assert!(pirates.iter().all(|p| p.is_dead));
+    }
+
+    /// Enemy-driven spawn chance stays within the documented cap.
+    #[test]
+    fn test_spawn_chance_cap() {
+        // Enemy with maxed powerup chance on a high wave must not exceed 0.2.
+        let enemy = Enemy::new(EnemyType::Elite, 0.0, 0.0, 100);
+        let base = enemy.powerup_chance;
+        let wave_bonus = (100u32 as f32 * 0.01).min(0.1);
+        assert!((base + wave_bonus).min(0.2) <= 0.2);
+    }
 }

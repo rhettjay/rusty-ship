@@ -18,5 +18,5 @@
     }
   ],
   "choices": null,
-  "on_complete": "SpawnBoss(RufusReverse)"
+  "on_complete": {"SpawnBoss": "RufusReverse"}
 }

@@ -1,8 +1,8 @@
+use crate::content::{self, AttackDef, BossPhaseDef, BulletDef, MovementDef};
+use ::rand::Rng;
 use macroquad::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use ::rand::Rng;
-use crate::content::{self, AttackDef, BossPhaseDef, BulletDef, MovementDef};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -40,7 +40,8 @@ impl BossType {
     }
 
     pub fn def(&self) -> &'static content::BossDef {
-        content::boss(self.key()).unwrap_or_else(|| panic!("missing boss definition: {}", self.key()))
+        content::boss(self.key())
+            .unwrap_or_else(|| panic!("missing boss definition: {}", self.key()))
     }
 
     pub fn name(&self) -> &'static str {
@@ -54,21 +55,6 @@ impl BossType {
         }
     }
 
-    pub fn max_health(&self) -> i32 {
-        self.def().max_health
-    }
-
-    pub fn portrait_filename(&self) -> &'static str {
-        match self {
-            BossType::Blowfish => "blowfish",
-            BossType::Twofish => "twofish",
-            BossType::RufusReverse => "rufus_reverse",
-            BossType::MollyHashpass => "molly_hashpass",
-            BossType::CaptainDavey => "captain_davey_portscan",
-            BossType::Deadbeef => "deadbeef",
-        }
-    }
-
     pub fn sprite_filename(&self) -> &'static str {
         match self {
             BossType::Blowfish => "blowfish",
@@ -79,19 +65,11 @@ impl BossType {
             BossType::Deadbeef => "deadbeef",
         }
     }
-
-    pub fn dialogue_intro_id(&self) -> String {
-        format!("boss_intro_{}", self.name().to_lowercase().replace(" ", "_"))
-    }
-
-    pub fn dialogue_defeat_id(&self) -> String {
-        format!("boss_defeat_{}", self.name().to_lowercase().replace(" ", "_"))
-    }
 }
 
 impl std::str::FromStr for BossType {
     type Err = ();
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         BossType::from_key(s).ok_or(())
     }
@@ -110,7 +88,6 @@ pub struct BossProjectile {
     pub y: f32,
     pub vel_x: f32,
     pub vel_y: f32,
-    pub damage: i32,
     pub size: f32,
     pub color: Color,
     pub lifetime: f64,
@@ -119,7 +96,12 @@ pub struct BossProjectile {
 
 impl BossProjectile {
     pub fn get_rect(&self) -> (f32, f32, f32, f32) {
-        (self.x - self.size / 2.0, self.y - self.size / 2.0, self.size, self.size)
+        (
+            self.x - self.size / 2.0,
+            self.y - self.size / 2.0,
+            self.size,
+            self.size,
+        )
     }
 }
 
@@ -144,6 +126,13 @@ impl ProjectilePattern {
     }
 }
 
+/// Content-authored speeds are pixels-per-frame at 60 fps.
+const FPS_SCALE: f32 = 60.0;
+/// Boss entry descent, pixels per second.
+const ENTRY_SPEED: f32 = 120.0;
+/// Damage-debounce window after the boss takes a hit, seconds.
+const HIT_INVULN: f64 = 0.1;
+
 pub struct Boss {
     pub boss_type: BossType,
     pub x: f32,
@@ -165,10 +154,8 @@ pub struct Boss {
     pub movement: MovementDef,
     pub phases: Vec<BossPhaseDef>,
     pub sprite: Option<Texture2D>,
-    pub portrait: Option<Texture2D>,
     pub color: Color,
     pub entry_anim: bool,
-    pub entry_timer: f64,
 }
 
 impl Boss {
@@ -189,8 +176,8 @@ impl Boss {
             attack_timer: 0.0,
             move_timer: 0.0,
             speed_x: match &def.movement {
-                MovementDef::Patrol { speed_x, .. } => *speed_x,
-                _ => 2.0,
+                MovementDef::Patrol { speed_x, .. } => *speed_x * FPS_SCALE,
+                _ => 120.0,
             },
             is_dead: false,
             invulnerable: false,
@@ -200,10 +187,8 @@ impl Boss {
             movement: def.movement.clone(),
             phases: def.phases.clone(),
             sprite: None,
-            portrait: None,
             color: WHITE,
             entry_anim: true,
-            entry_timer: 0.0,
         };
 
         boss.init_pattern_state();
@@ -221,8 +206,10 @@ impl Boss {
                 self.pattern_state.insert("split_count".to_string(), 0.0);
             }
             BossType::RufusReverse => {
-                self.pattern_state.insert("teleport_cooldown".to_string(), 0.0);
-                self.pattern_state.insert("reverse_zone_active".to_string(), 0.0);
+                self.pattern_state
+                    .insert("teleport_cooldown".to_string(), 0.0);
+                self.pattern_state
+                    .insert("reverse_zone_active".to_string(), 0.0);
             }
             BossType::MollyHashpass => {
                 self.pattern_state.insert("heal_cooldown".to_string(), 0.0);
@@ -230,8 +217,10 @@ impl Boss {
             }
             BossType::CaptainDavey => {
                 self.pattern_state.insert("scan_cooldown".to_string(), 0.0);
-                self.pattern_state.insert("broadside_ready".to_string(), 0.0);
-                self.pattern_state.insert("minion_spawn_timer".to_string(), 0.0);
+                self.pattern_state
+                    .insert("broadside_ready".to_string(), 0.0);
+                self.pattern_state
+                    .insert("minion_spawn_timer".to_string(), 0.0);
             }
             BossType::Deadbeef => {
                 self.pattern_state.insert("food_type".to_string(), 0.0);
@@ -242,7 +231,6 @@ impl Boss {
 
     pub async fn load_assets(&mut self) {
         let sprite_path = format!("assets/bosses/{}.png", self.boss_type.sprite_filename());
-        let portrait_path = format!("assets/portraits/{}.png", self.boss_type.portrait_filename());
 
         if let Ok(sprite) = load_texture(&sprite_path).await {
             sprite.set_filter(FilterMode::Nearest);
@@ -250,19 +238,11 @@ impl Boss {
         } else {
             eprintln!("Warning: Could not load boss sprite: {}", sprite_path);
         }
-
-        if let Ok(portrait) = load_texture(&portrait_path).await {
-            portrait.set_filter(FilterMode::Nearest);
-            self.portrait = Some(portrait);
-        } else {
-            eprintln!("Warning: Could not load boss portrait: {}", portrait_path);
-        }
     }
 
     pub fn update(&mut self, dt: f64, player_x: f32, player_y: f32) {
         if self.entry_anim {
-            self.entry_timer += dt;
-            self.y += 2.0;
+            self.y += ENTRY_SPEED * dt as f32;
             if self.y >= 50.0 {
                 self.y = 50.0;
                 self.entry_anim = false;
@@ -278,13 +258,34 @@ impl Boss {
             }
         }
 
-        self.update_phase();
+        // Rufus Reverse's control-reversal zone ticks down here.
+        self.tick_reverse_zone(dt);
+
+        self.update_phase(dt);
         self.update_movement(dt);
         self.update_attacks(dt, player_x, player_y);
-        self.update_projectiles(dt);
+        self.update_projectiles(dt, player_x, player_y);
     }
 
-    fn update_phase(&mut self) {
+    /// True while a reverse zone is active (player controls inverted).
+    pub fn is_reverse_zone_active(&self) -> bool {
+        *self
+            .pattern_state
+            .get("reverse_zone_active")
+            .unwrap_or(&0.0)
+            > 0.0
+    }
+
+    /// Ticks down the reverse-zone timer.
+    fn tick_reverse_zone(&mut self, dt: f64) {
+        if let Some(zone) = self.pattern_state.get_mut("reverse_zone_active") {
+            if *zone > 0.0 {
+                *zone -= dt as f32;
+            }
+        }
+    }
+
+    fn update_phase(&mut self, dt: f64) {
         let health_pct = self.health as f32 / self.max_health as f32;
         let new_phase = self.phase_for_health(health_pct);
 
@@ -293,7 +294,7 @@ impl Boss {
             self.phase_timer = 0.0;
             crate::audio::play_sfx("boss_laugh");
         }
-        self.phase_timer += 1.0 / 60.0;
+        self.phase_timer += dt;
     }
 
     fn phase_for_health(&self, health_pct: f32) -> BossPhase {
@@ -320,14 +321,25 @@ impl Boss {
         self.move_timer += dt;
 
         match &self.movement {
-            MovementDef::Patrol { base_y, amp_y, freq_y, .. } => {
+            MovementDef::Patrol {
+                base_y,
+                amp_y,
+                freq_y,
+                ..
+            } => {
                 self.x += self.speed_x * dt as f32;
                 if self.x <= 50.0 || self.x >= screen_width() - self.width - 50.0 {
                     self.speed_x = -self.speed_x;
                 }
                 self.y = *base_y + (self.move_timer * *freq_y as f64).sin() as f32 * *amp_y;
             }
-            MovementDef::CenteredSway { amp_x, freq_x, base_y, amp_y, freq_y } => {
+            MovementDef::CenteredSway {
+                amp_x,
+                freq_x,
+                base_y,
+                amp_y,
+                freq_y,
+            } => {
                 self.x = screen_width() / 2.0 - self.width / 2.0
                     + (self.move_timer * *freq_x as f64).sin() as f32 * *amp_x;
                 self.y = *base_y + (self.move_timer * *freq_y as f64).sin() as f32 * *amp_y;
@@ -337,7 +349,8 @@ impl Boss {
                     if rand::gen_range(0, 100) < 2 {
                         self.x = rand::gen_range(100.0, screen_width() - self.width - 100.0);
                         self.y = rand::gen_range(50.0, 200.0);
-                        self.pattern_state.insert("teleport_cooldown".to_string(), *cooldown);
+                        self.pattern_state
+                            .insert("teleport_cooldown".to_string(), *cooldown);
                     }
                 } else {
                     *self.pattern_state.get_mut("teleport_cooldown").unwrap() -= dt as f32;
@@ -368,34 +381,81 @@ impl Boss {
         let mut rng = ::rand::thread_rng();
 
         match attack {
-            AttackDef::Burst { count, speed, bullet, chance } => {
+            AttackDef::Burst {
+                count,
+                speed,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
-                    self.ring_attack(*count, *speed, bullet);
+                    self.ring_attack(*count, *speed * FPS_SCALE, bullet);
                 }
             }
-            AttackDef::Aimed { count, speed, spread, mirror, bullet, chance } => {
+            AttackDef::Aimed {
+                count,
+                speed,
+                spread,
+                mirror,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
-                    self.aimed_attack(*count, *speed, *spread, *mirror, bullet, player_x, player_y);
+                    self.aimed_attack(
+                        *count,
+                        *speed * FPS_SCALE,
+                        *spread,
+                        *mirror,
+                        bullet,
+                        player_x,
+                        player_y,
+                    );
                 }
             }
-            AttackDef::Scatter { count, speed, spread, bullet, chance } => {
+            AttackDef::Scatter {
+                count,
+                speed,
+                spread,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
-                    self.aimed_attack(*count, *speed, *spread, false, bullet, player_x, player_y);
+                    self.aimed_attack(
+                        *count,
+                        *speed * FPS_SCALE,
+                        *spread,
+                        false,
+                        bullet,
+                        player_x,
+                        player_y,
+                    );
                 }
             }
-            AttackDef::Ring { count, speed, bullet, chance } => {
+            AttackDef::Ring {
+                count,
+                speed,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
-                    self.ring_attack(*count, *speed, bullet);
+                    self.ring_attack(*count, *speed * FPS_SCALE, bullet);
                 }
             }
-            AttackDef::Homing { count, bullet, chance } => {
+            AttackDef::Homing {
+                count,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
                     self.homing_missiles(*count, bullet);
                 }
             }
-            AttackDef::Charge { speed, invuln, chance } => {
+            AttackDef::Charge {
+                speed,
+                invuln,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
-                    self.charge_attack(*speed, *invuln, player_x);
+                    self.charge_attack(*speed * FPS_SCALE, *invuln, player_x);
                 }
             }
             AttackDef::Heal { amount, chance } => {
@@ -403,7 +463,11 @@ impl Boss {
                     self.health = (self.health + *amount).min(self.max_health);
                 }
             }
-            AttackDef::HealBeam { amount, invuln, chance } => {
+            AttackDef::HealBeam {
+                amount,
+                invuln,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
                     self.invulnerable = true;
                     self.invuln_timer = *invuln as f64;
@@ -411,7 +475,11 @@ impl Boss {
                     self.health = (self.health + *amount).min(self.max_health);
                 }
             }
-            AttackDef::PoisonCloud { count, bullet, chance } => {
+            AttackDef::PoisonCloud {
+                count,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
                     self.poison_cloud(*count, bullet, player_x, player_y);
                 }
@@ -420,12 +488,20 @@ impl Boss {
             AttackDef::SpawnMinions => self.spawn_minions(),
             AttackDef::ReverseZone { duration, chance } => {
                 if rng.gen::<f32>() < *chance {
-                    self.pattern_state.insert("reverse_zone_active".to_string(), *duration);
+                    self.pattern_state
+                        .insert("reverse_zone_active".to_string(), *duration);
                 }
             }
-            AttackDef::Wall { rows, cols, speed, gap, bullet, chance } => {
+            AttackDef::Wall {
+                rows,
+                cols,
+                speed,
+                gap,
+                bullet,
+                chance,
+            } => {
                 if rng.gen::<f32>() < *chance {
-                    self.wall_attack(*rows, *cols, *speed, *gap, bullet);
+                    self.wall_attack(*rows, *cols, *speed * FPS_SCALE, *gap, bullet);
                 }
             }
             AttackDef::Beam { bullet, chance } => {
@@ -446,13 +522,19 @@ impl Boss {
         }
     }
 
-    fn make_projectile(&self, x: f32, y: f32, vel_x: f32, vel_y: f32, bullet: &BulletDef) -> BossProjectile {
+    fn make_projectile(
+        &self,
+        x: f32,
+        y: f32,
+        vel_x: f32,
+        vel_y: f32,
+        bullet: &BulletDef,
+    ) -> BossProjectile {
         BossProjectile {
             x,
             y,
             vel_x,
             vel_y,
-            damage: bullet.damage,
             size: bullet.size,
             color: content::parse_color(&bullet.color),
             lifetime: bullet.lifetime,
@@ -467,17 +549,34 @@ impl Boss {
 
         for i in 0..count {
             let angle = i as f32 * angle_step;
-            let p = self.make_projectile(center_x, center_y, angle.cos() * speed, angle.sin() * speed, bullet);
+            let p = self.make_projectile(
+                center_x,
+                center_y,
+                angle.cos() * speed,
+                angle.sin() * speed,
+                bullet,
+            );
             self.projectiles.push(p);
         }
     }
 
-    fn aimed_attack(&mut self, count: u32, speed: f32, spread: f32, mirror: bool, bullet: &BulletDef, player_x: f32, player_y: f32) {
+    #[allow(clippy::too_many_arguments)]
+    fn aimed_attack(
+        &mut self,
+        count: u32,
+        speed: f32,
+        spread: f32,
+        mirror: bool,
+        bullet: &BulletDef,
+        player_x: f32,
+        player_y: f32,
+    ) {
         let center_x = self.x + self.width / 2.0;
         let center_y = self.y + self.height;
         let dx = player_x - center_x;
         let dy = player_y - center_y;
         let dist = (dx * dx + dy * dy).sqrt();
+
         if dist <= 0.0 {
             return;
         }
@@ -486,15 +585,26 @@ impl Boss {
         if mirror {
             for i in 0..count {
                 let dir = if i % 2 == 0 { 1.0 } else { -1.0 };
-                let p = self.make_projectile(center_x, center_y, nx * speed * dir, ny * speed, bullet);
+                let p =
+                    self.make_projectile(center_x, center_y, nx * speed * dir, ny * speed, bullet);
                 self.projectiles.push(p);
             }
         } else {
             let base_angle = ny.atan2(nx);
             for i in 0..count {
-                let t = if count > 1 { i as f32 / (count - 1) as f32 } else { 0.5 };
+                let t = if count > 1 {
+                    i as f32 / (count - 1) as f32
+                } else {
+                    0.5
+                };
                 let angle = base_angle + (t - 0.5) * spread;
-                let p = self.make_projectile(center_x, center_y, angle.cos() * speed, angle.sin() * speed, bullet);
+                let p = self.make_projectile(
+                    center_x,
+                    center_y,
+                    angle.cos() * speed,
+                    angle.sin() * speed,
+                    bullet,
+                );
                 self.projectiles.push(p);
             }
         }
@@ -511,7 +621,11 @@ impl Boss {
     }
 
     fn charge_attack(&mut self, speed: f32, invuln: f32, player_x: f32) {
-        let dir = if player_x > self.x + self.width / 2.0 { 1.0 } else { -1.0 };
+        let dir = if player_x > self.x + self.width / 2.0 {
+            1.0
+        } else {
+            -1.0
+        };
         self.speed_x = dir * speed;
         self.invulnerable = true;
         self.invuln_timer = invuln as f64;
@@ -527,12 +641,30 @@ impl Boss {
         }
     }
 
+    /// One-shot signals consumed by the wave director, which owns the pirate
+    /// minion roster.
     fn revive_minions(&mut self) {
         self.pattern_state.insert("revive_signal".to_string(), 1.0);
     }
 
     fn spawn_minions(&mut self) {
         self.pattern_state.insert("spawn_minions".to_string(), 1.0);
+    }
+
+    pub fn check_revive_signal(&self) -> bool {
+        *self.pattern_state.get("revive_signal").unwrap_or(&0.0) > 0.0
+    }
+
+    pub fn clear_revive_signal(&mut self) {
+        self.pattern_state.insert("revive_signal".to_string(), 0.0);
+    }
+
+    pub fn check_spawn_minions(&self) -> bool {
+        *self.pattern_state.get("spawn_minions").unwrap_or(&0.0) > 0.0
+    }
+
+    pub fn clear_spawn_minions(&mut self) {
+        self.pattern_state.insert("spawn_minions".to_string(), 0.0);
     }
 
     fn scanning_beam(&mut self, bullet: &BulletDef, player_x: f32) {
@@ -580,8 +712,8 @@ impl Boss {
         let mut p = self.make_projectile(
             center_x,
             center_y,
-            (dx / dist) * 3.0,
-            (dy / dist) * 3.0 - 2.0,
+            (dx / dist) * 180.0,
+            (dy / dist) * 180.0 - 120.0,
             bullet,
         );
         p.color = content::parse_color(color);
@@ -593,15 +725,14 @@ impl Boss {
             self.projectiles.push(BossProjectile {
                 x: rand::gen_range(0.0, screen_width()),
                 y: -50.0,
-                vel_x: rand::gen_range(-1.0, 1.0),
-                vel_y: rand::gen_range(3.0, 6.0),
-                damage: 1,
+                vel_x: rand::gen_range(-60.0, 60.0),
+                vel_y: rand::gen_range(180.0, 360.0),
                 size: rand::gen_range(15.0, 25.0),
                 color: Color::new(
                     rand::gen_range(0.5, 1.0),
-                    rand::gen_range(0.3, 0.8),
-                    rand::gen_range(0.0, 0.5),
-                    1.0
+                    rand::gen_range(0.3, 0.6),
+                    rand::gen_range(0.1, 0.3),
+                    1.0,
                 ),
                 lifetime: 10.0,
                 pattern: ProjectilePattern::Straight,
@@ -609,7 +740,9 @@ impl Boss {
         }
     }
 
-    fn update_projectiles(&mut self, dt: f64) {
+    fn update_projectiles(&mut self, dt: f64, player_x: f32, player_y: f32) {
+        let dt_f32 = dt as f32;
+
         self.projectiles.retain_mut(|p| {
             p.lifetime -= dt;
             if p.lifetime <= 0.0 {
@@ -618,49 +751,50 @@ impl Boss {
 
             match p.pattern {
                 ProjectilePattern::Straight => {
-                    p.x += p.vel_x * dt as f32;
-                    p.y += p.vel_y * dt as f32;
+                    p.x += p.vel_x * dt_f32;
+                    p.y += p.vel_y * dt_f32;
                 }
                 ProjectilePattern::Spiral => {
-                    p.vel_x = (p.vel_x + p.vel_y * 0.1).sin() * 4.0;
-                    p.vel_y = (p.vel_y - p.vel_x * 0.1).cos() * 4.0;
-                    p.x += p.vel_x * dt as f32;
-                    p.y += p.vel_y * dt as f32;
+                    p.vel_x = (p.vel_x + p.vel_y * 0.1).sin() * 240.0;
+                    p.vel_y = (p.vel_y - p.vel_x * 0.1).cos() * 240.0;
+                    p.x += p.vel_x * dt_f32;
+                    p.y += p.vel_y * dt_f32;
                 }
                 ProjectilePattern::Homing => {
-                    let target_x = screen_width() / 2.0;
-                    let target_y = screen_height() - 100.0;
-                    let dx = target_x - p.x;
-                    let dy = target_y - p.y;
+                    let dx = player_x - p.x;
+                    let dy = player_y - p.y;
                     let dist = (dx * dx + dy * dy).sqrt();
                     if dist > 0.0 {
-                        p.vel_x += (dx / dist) * 0.3;
-                        p.vel_y += (dy / dist) * 0.3;
+                        p.vel_x += (dx / dist) * 18.0 * dt_f32;
+                        p.vel_y += (dy / dist) * 18.0 * dt_f32;
                         let speed = (p.vel_x * p.vel_x + p.vel_y * p.vel_y).sqrt();
-                        if speed > 5.0 {
-                            p.vel_x = p.vel_x / speed * 5.0;
-                            p.vel_y = p.vel_y / speed * 5.0;
+                        if speed > 300.0 {
+                            p.vel_x = p.vel_x / speed * 300.0;
+                            p.vel_y = p.vel_y / speed * 300.0;
                         }
                     }
-                    p.x += p.vel_x * dt as f32;
-                    p.y += p.vel_y * dt as f32;
+                    p.x += p.vel_x * dt_f32;
+                    p.y += p.vel_y * dt_f32;
                 }
                 ProjectilePattern::Bounce => {
-                    p.vel_y += 0.3 * dt as f32;
-                    p.x += p.vel_x * dt as f32;
-                    p.y += p.vel_y * dt as f32;
+                    p.vel_y += 300.0 * dt_f32;
+                    p.x += p.vel_x * dt_f32;
+                    p.y += p.vel_y * dt_f32;
                     if p.y > screen_height() - 50.0 {
                         p.y = screen_height() - 50.0;
                         p.vel_y = -p.vel_y * 0.7;
                     }
                 }
                 ProjectilePattern::Wave => {
-                    p.x += p.vel_x * dt as f32;
-                    p.y += p.vel_y * dt as f32 + (p.x * 0.05).sin() * 2.0 * dt as f32;
+                    p.x += p.vel_x * dt_f32;
+                    p.y += p.vel_y * dt_f32 + (p.x * 0.05).sin() * 120.0 * dt_f32;
                 }
             }
 
-            p.x > -50.0 && p.x < screen_width() + 50.0 && p.y > -50.0 && p.y < screen_height() + 50.0
+            p.x > -50.0
+                && p.x < screen_width() + 50.0
+                && p.y > -50.0
+                && p.y < screen_height() + 50.0
         });
     }
 
@@ -674,7 +808,7 @@ impl Boss {
                 DrawTextureParams {
                     dest_size: Some(Vec2::new(self.width, self.height)),
                     ..Default::default()
-                }
+                },
             );
         } else {
             draw_rectangle(self.x, self.y, self.width, self.height, self.color);
@@ -689,12 +823,18 @@ impl Boss {
         let bar_height = 8.0;
         let bar_x = self.x;
         let bar_y = self.y - 15.0;
-        
-        draw_rectangle(bar_x, bar_y, bar_width, bar_height, Color::new(0.2, 0.0, 0.0, 0.8));
+
+        draw_rectangle(
+            bar_x,
+            bar_y,
+            bar_width,
+            bar_height,
+            Color::new(0.2, 0.0, 0.0, 0.8),
+        );
         let health_pct = self.health as f32 / self.max_health as f32;
         draw_rectangle(bar_x, bar_y, bar_width * health_pct, bar_height, RED);
         draw_rectangle_lines(bar_x, bar_y, bar_width, bar_height, 2.0, WHITE);
-        
+
         let name = self.boss_type.name();
         let name_x = self.x + self.width / 2.0 - measure_text(name, None, 16, 1.0).width / 2.0;
         draw_text(name, name_x, bar_y - 5.0, 16.0, WHITE);
@@ -707,16 +847,18 @@ impl Boss {
         }
     }
 
+    /// Returns true if this damage killed the boss. The boss briefly becomes
+    /// invulnerable after each hit, which also rate-limits piercing bullets.
     pub fn take_damage(&mut self, damage: i32) -> bool {
-        if self.invulnerable || self.entry_anim {
+        if !self.can_take_damage() {
             return false;
         }
-        
+
         self.health -= damage;
         self.invulnerable = true;
-        self.invuln_timer = 0.1;
+        self.invuln_timer = HIT_INVULN;
         self.color = RED;
-        
+
         if self.health <= 0 {
             self.health = 0;
             self.is_dead = true;
@@ -730,38 +872,66 @@ impl Boss {
         (self.x, self.y, self.width, self.height)
     }
 
-    pub fn check_projectile_collision(&self, px: f32, py: f32, pw: f32, ph: f32) -> bool {
-        for p in &self.projectiles {
-            if px < p.x + p.size && px + pw > p.x - p.size
-                && py < p.y + p.size && py + ph > p.y - p.size {
-                return true;
-            }
-        }
-        false
+    /// True when a hit would register (not invulnerable, not entering).
+    pub fn can_take_damage(&self) -> bool {
+        !self.invulnerable && !self.entry_anim
     }
 
-    pub fn get_projectiles(&self) -> &Vec<BossProjectile> {
+    pub fn get_projectiles(&self) -> &[BossProjectile] {
         &self.projectiles
     }
+}
 
-    pub fn clear_revive_signal(&mut self) {
-        self.pattern_state.insert("revive_signal".to_string(), 0.0);
-    }
-
-    pub fn check_revive_signal(&self) -> bool {
-        *self.pattern_state.get("revive_signal").unwrap_or(&0.0) > 0.0
-    }
-
-    pub fn check_spawn_minions(&self) -> bool {
-        *self.pattern_state.get("spawn_minions").unwrap_or(&0.0) > 0.0
-    }
-
-    pub fn clear_spawn_minions(&mut self) {
-        self.pattern_state.insert("spawn_minions".to_string(), 0.0);
-    }
-
-    pub fn is_reverse_zone_active(&self) -> bool {
-        *self.pattern_state.get("reverse_zone_active").unwrap_or(&0.0) > 0.0
+/// Builds a boss via struct literal for tests — `Boss::new` reads
+/// `screen_width()` and needs a GPU context.
+#[cfg(test)]
+pub(crate) fn make_test_boss(health: i32, max_health: i32) -> Boss {
+    let mut state = std::collections::HashMap::new();
+    state.insert("charge_ready".to_string(), 0.0);
+    Boss {
+        boss_type: BossType::Blowfish,
+        x: 0.0,
+        y: 0.0,
+        width: 80.0,
+        height: 80.0,
+        health,
+        max_health,
+        phase: BossPhase::Phase1,
+        phase_timer: 0.0,
+        attack_timer: 0.0,
+        move_timer: 0.0,
+        speed_x: 120.0,
+        is_dead: false,
+        invulnerable: false,
+        invuln_timer: 0.0,
+        projectiles: Vec::new(),
+        pattern_state: state,
+        movement: MovementDef::Patrol {
+            speed_x: 2.0,
+            base_y: 50.0,
+            amp_y: 30.0,
+            freq_y: 0.5,
+        },
+        phases: vec![
+            BossPhaseDef {
+                health_threshold: 1.0,
+                attack_interval: 2.5,
+                attacks: vec![],
+            },
+            BossPhaseDef {
+                health_threshold: 0.5,
+                attack_interval: 1.8,
+                attacks: vec![],
+            },
+            BossPhaseDef {
+                health_threshold: 0.2,
+                attack_interval: 1.2,
+                attacks: vec![],
+            },
+        ],
+        sprite: None,
+        color: WHITE,
+        entry_anim: false,
     }
 }
 
@@ -769,40 +939,10 @@ impl Boss {
 mod tests {
     use super::*;
 
+    /// Builds a boss via struct literal so tests don't need a GPU context
+    /// (`Boss::new` reads `screen_width()`).
     fn make_boss(health: i32, max_health: i32) -> Boss {
-        let mut state = std::collections::HashMap::new();
-        state.insert("burst_count".to_string(), 0.0);
-        state.insert("charge_ready".to_string(), 0.0);
-        Boss {
-            boss_type: BossType::Blowfish,
-            x: 0.0,
-            y: 0.0,
-            width: 80.0,
-            height: 80.0,
-            health,
-            max_health,
-            phase: BossPhase::Phase1,
-            phase_timer: 0.0,
-            attack_timer: 0.0,
-            move_timer: 0.0,
-            speed_x: 2.0,
-            is_dead: false,
-            invulnerable: false,
-            invuln_timer: 0.0,
-            projectiles: Vec::new(),
-            pattern_state: state,
-            movement: MovementDef::Patrol { speed_x: 2.0, base_y: 50.0, amp_y: 30.0, freq_y: 0.5 },
-            phases: vec![
-                BossPhaseDef { health_threshold: 1.0, attack_interval: 2.5, attacks: vec![] },
-                BossPhaseDef { health_threshold: 0.5, attack_interval: 1.8, attacks: vec![] },
-                BossPhaseDef { health_threshold: 0.2, attack_interval: 1.2, attacks: vec![] },
-            ],
-            sprite: None,
-            portrait: None,
-            color: WHITE,
-            entry_anim: false,
-            entry_timer: 0.0,
-        }
+        make_test_boss(health, max_health)
     }
 
     #[test]
@@ -823,16 +963,16 @@ mod tests {
     }
 
     #[test]
-    fn test_invulnerable_prevents_damage() {
+    fn test_take_damage_invulnerable() {
         let mut boss = make_boss(150, 150);
-        boss.invulnerable = true;
+        boss.take_damage(10);
         let result = boss.take_damage(10);
         assert!(!result);
-        assert_eq!(boss.health, 150);
+        assert_eq!(boss.health, 140);
     }
 
     #[test]
-    fn test_entry_anim_prevents_damage() {
+    fn test_take_damage_entry_anim() {
         let mut boss = make_boss(150, 150);
         boss.entry_anim = true;
         let result = boss.take_damage(10);
@@ -845,28 +985,32 @@ mod tests {
         let mut boss = make_boss(150, 150);
         boss.take_damage(10);
         assert!(boss.invulnerable);
-        assert_eq!(boss.invuln_timer, 0.1);
+        assert_eq!(boss.invuln_timer, HIT_INVULN);
     }
 
     #[test]
-    fn test_phase_transition_to_phase2() {
-        let mut boss = make_boss(75, 150);
-        boss.update_phase();
-        assert_eq!(boss.phase, BossPhase::Phase2);
+    fn test_can_take_damage() {
+        let mut boss = make_boss(150, 150);
+        assert!(boss.can_take_damage());
+        boss.invulnerable = true;
+        assert!(!boss.can_take_damage());
+        boss.invulnerable = false;
+        boss.entry_anim = true;
+        assert!(!boss.can_take_damage());
     }
 
     #[test]
-    fn test_phase_transition_to_phase3() {
-        let mut boss = make_boss(30, 150);
-        boss.update_phase();
-        assert_eq!(boss.phase, BossPhase::Phase3);
-    }
-
-    #[test]
-    fn test_phase_remains_phase1_above_half() {
-        let mut boss = make_boss(100, 150);
-        boss.update_phase();
+    fn test_phase_progression() {
+        let mut boss = make_boss(150, 150);
         assert_eq!(boss.phase, BossPhase::Phase1);
+
+        boss.health = 60; // 40% -> phase 2
+        boss.update_phase(0.016);
+        assert_eq!(boss.phase, BossPhase::Phase2);
+
+        boss.health = 15; // 10% -> phase 3
+        boss.update_phase(0.016);
+        assert_eq!(boss.phase, BossPhase::Phase3);
     }
 
     #[test]
@@ -879,10 +1023,34 @@ mod tests {
         assert_eq!(y, 0.0);
     }
 
+    /// Reverse-zone signal: set by the attack, ticks down over time.
     #[test]
-    fn test_boss_phase_defaults_to_phase1() {
-        let boss = make_boss(150, 150);
-        assert_eq!(boss.phase, BossPhase::Phase1);
-        assert!(!boss.is_dead);
+    fn test_reverse_zone_lifecycle() {
+        let mut boss = make_boss(150, 150);
+        assert!(!boss.is_reverse_zone_active());
+        boss.pattern_state
+            .insert("reverse_zone_active".to_string(), 5.0);
+        assert!(boss.is_reverse_zone_active());
+        boss.tick_reverse_zone(1.0);
+        assert!(boss.is_reverse_zone_active());
+        boss.tick_reverse_zone(4.0);
+        assert!(!boss.is_reverse_zone_active());
+    }
+
+    /// Minion signals are one-shot: set by attacks, cleared by the consumer.
+    #[test]
+    fn test_minion_signals() {
+        let mut boss = make_boss(150, 150);
+        assert!(!boss.check_spawn_minions());
+        boss.pattern_state.insert("spawn_minions".to_string(), 1.0);
+        assert!(boss.check_spawn_minions());
+        boss.clear_spawn_minions();
+        assert!(!boss.check_spawn_minions());
+
+        assert!(!boss.check_revive_signal());
+        boss.pattern_state.insert("revive_signal".to_string(), 1.0);
+        assert!(boss.check_revive_signal());
+        boss.clear_revive_signal();
+        assert!(!boss.check_revive_signal());
     }
 }

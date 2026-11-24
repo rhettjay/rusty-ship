@@ -1,8 +1,12 @@
-use macroquad::prelude::*;
+use crate::config::CONFIG;
 use ::rand::Rng;
+use macroquad::prelude::*;
 
-pub const PIRATE_ROTATION: f32 = 3.14159265359;
+pub const PIRATE_ROTATION: f32 = std::f32::consts::PI;
 
+/// Pirate minions, spawned by boss attacks (Captain Davey's crew, Molly's
+/// revived minions). They drift down, bounce off the screen edges, and hurt
+/// the player on contact.
 pub struct Pirate {
     pub x: f32,
     pub y: f32,
@@ -10,9 +14,6 @@ pub struct Pirate {
     pub speed_y: f32,
     pub color: Color,
     pub is_dead: bool,
-    pub is_special: bool,
-    pub is_shoot: bool,
-    pub is_challenger: bool,
     pub width: f32,
     pub height: f32,
 }
@@ -24,27 +25,26 @@ impl Pirate {
             x,
             y,
             speed_x,
-            speed_y: rng.gen_range(1.0..3.0),
+            speed_y: rng.gen_range(60.0..180.0),
             color: WHITE,
             is_dead: false,
-            is_special: false,
-            is_shoot: false,
-            is_challenger: false,
-            width: 32.0,
-            height: 32.0,
+            width: CONFIG.pirate_width,
+            height: CONFIG.pirate_height,
         }
     }
 
-    pub fn update(&mut self) {
-        self.x += self.speed_x;
-        self.y += self.speed_y;
-        
-        let mut rng = ::rand::thread_rng();
-        let shoot_chance = rng.gen_range(0..15);
-        self.is_shoot = shoot_chance > 10;
-        
-        let special_chance = rng.gen_range(0..45);
-        self.is_special = special_chance > 10;
+    /// `dt` in seconds; speeds are pixels per second.
+    pub fn update(&mut self, dt: f32) {
+        self.x += self.speed_x * dt;
+        self.y += self.speed_y * dt;
+
+        // Bounce off the side walls.
+        if self.x > screen_width() - self.width {
+            self.speed_x = -self.speed_x.abs();
+        }
+        if self.x < 0.0 {
+            self.speed_x = self.speed_x.abs();
+        }
     }
 
     pub fn draw(&self, texture: &Texture2D) {
@@ -57,10 +57,10 @@ impl Pirate {
                 dest_size: Some(Vec2::new(self.width, self.height)),
                 rotation: PIRATE_ROTATION,
                 ..Default::default()
-            }
+            },
         );
     }
-    
+
     pub fn get_rect(&self) -> (f32, f32, f32, f32) {
         (self.x, self.y, self.width, self.height)
     }

@@ -1,6 +1,6 @@
-use crate::menu::{NarrativeProgress, DialogueContext, DialogueCallback};
 use crate::boss::BossType;
 use crate::config::CONFIG;
+use crate::menu::{DialogueCallback, DialogueContext, NarrativeProgress};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NarrativeTrigger {
@@ -11,7 +11,10 @@ pub enum NarrativeTrigger {
     AllBossesDefeated,
 }
 
-pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigger) -> Option<DialogueContext> {
+pub fn check_triggers(
+    progress: &mut NarrativeProgress,
+    trigger: NarrativeTrigger,
+) -> Option<DialogueContext> {
     match trigger {
         NarrativeTrigger::GameStart => {
             if progress.current_chapter == 0 && progress.flags.is_empty() {
@@ -32,9 +35,10 @@ pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigge
             Some(boss_defeat_dialogue(boss_type))
         }
         NarrativeTrigger::ScoreThreshold(score) => {
-            if score >= CONFIG.bonus_score_threshold 
+            if score >= CONFIG.bonus_score_threshold
                 && !progress.defeated_bosses.iter().any(|b| b == "Deadbeef")
-                && !progress.flags.contains(&"deadbeef_spawned".to_string()) {
+                && !progress.flags.contains(&"deadbeef_spawned".to_string())
+            {
                 progress.flags.push("deadbeef_spawned".to_string());
                 Some(bonus_boss_dialogue())
             } else {
@@ -54,7 +58,12 @@ pub fn check_triggers(progress: &mut NarrativeProgress, trigger: NarrativeTrigge
 fn check_boss_trigger(wave: u32, progress: &NarrativeProgress) -> Option<DialogueContext> {
     if let Some(boss) = crate::content::boss_for_wave(wave).and_then(BossType::from_key) {
         if let Some(idx) = BOSS_ORDER.iter().position(|&b| b == boss) {
-            if idx < 5 && !progress.defeated_bosses.iter().any(|b| b == &format!("{:?}", BOSS_ORDER[idx])) {
+            if idx < 5
+                && !progress
+                    .defeated_bosses
+                    .iter()
+                    .any(|b| b == &format!("{:?}", BOSS_ORDER[idx]))
+            {
                 return Some(boss_intro_dialogue(BOSS_ORDER[idx]));
             }
         }

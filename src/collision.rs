@@ -1,24 +1,13 @@
-use macroquad::prelude::*;
+// Canonical AABB overlap test for the whole game.
+//
+// Every entity exposes its bounds as an (x, y, w, h) tuple; all collision
+// checks go through this one function so the semantics (touching edges do
+// NOT count as overlap) are defined exactly once.
 
-#[derive(Clone, Copy)]
-pub struct Hitbox {
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
-}
+pub type Rect = (f32, f32, f32, f32);
 
-impl Hitbox {
-    pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
-        Self { x, y, w, h }
-    }
-}
-
-pub fn check_collision(a: &Hitbox, b: &Hitbox) -> bool {
-    a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y
+pub fn rects_overlap(a: Rect, b: Rect) -> bool {
+    a.0 < b.0 + b.2 && a.0 + a.2 > b.0 && a.1 < b.1 + b.3 && a.1 + a.3 > b.1
 }
 
 #[cfg(test)]
@@ -27,43 +16,43 @@ mod tests {
 
     #[test]
     fn test_overlap() {
-        let a = Hitbox::new(0.0, 0.0, 10.0, 10.0);
-        let b = Hitbox::new(5.0, 5.0, 10.0, 10.0);
-        assert!(check_collision(&a, &b));
+        assert!(rects_overlap(
+            (0.0, 0.0, 10.0, 10.0),
+            (5.0, 5.0, 10.0, 10.0)
+        ));
     }
 
     #[test]
     fn test_no_overlap() {
-        let a = Hitbox::new(0.0, 0.0, 10.0, 10.0);
-        let b = Hitbox::new(20.0, 20.0, 10.0, 10.0);
-        assert!(!check_collision(&a, &b));
+        assert!(!rects_overlap(
+            (0.0, 0.0, 10.0, 10.0),
+            (20.0, 20.0, 10.0, 10.0)
+        ));
     }
 
     #[test]
     fn test_contained() {
-        let a = Hitbox::new(0.0, 0.0, 20.0, 20.0);
-        let b = Hitbox::new(5.0, 5.0, 5.0, 5.0);
-        assert!(check_collision(&a, &b));
+        assert!(rects_overlap((0.0, 0.0, 20.0, 20.0), (5.0, 5.0, 5.0, 5.0)));
     }
 
     #[test]
     fn test_edge_touching() {
-        let a = Hitbox::new(0.0, 0.0, 10.0, 10.0);
-        let b = Hitbox::new(10.0, 0.0, 10.0, 10.0);
-        assert!(!check_collision(&a, &b));
+        assert!(!rects_overlap(
+            (0.0, 0.0, 10.0, 10.0),
+            (10.0, 0.0, 10.0, 10.0)
+        ));
     }
 
     #[test]
     fn test_negative_coords() {
-        let a = Hitbox::new(-5.0, -5.0, 10.0, 10.0);
-        let b = Hitbox::new(0.0, 0.0, 10.0, 10.0);
-        assert!(check_collision(&a, &b));
+        assert!(rects_overlap(
+            (-5.0, -5.0, 10.0, 10.0),
+            (0.0, 0.0, 10.0, 10.0)
+        ));
     }
 
     #[test]
     fn test_zero_size() {
-        let a = Hitbox::new(5.0, 5.0, 0.0, 0.0);
-        let b = Hitbox::new(5.0, 5.0, 10.0, 10.0);
-        assert!(!check_collision(&a, &b));
+        assert!(!rects_overlap((5.0, 5.0, 0.0, 0.0), (5.0, 5.0, 10.0, 10.0)));
     }
 }
