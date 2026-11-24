@@ -390,7 +390,7 @@ fn update_playing(
     // Boss minion signals (Captain Davey's crew, Molly's revives).
     world
         .wave_director
-        .drain_minion_signals(&mut world.pirates, screen_width());
+        .drain_boss_signals(&mut world.pirates, screen_width());
 
     // Enemy behavior and firing.
     let (ship_x, ship_y) = (world.ship.x, world.ship.y);
@@ -1227,6 +1227,16 @@ fn check_collisions(world: &mut World) {
                 pirate.is_dead = true;
                 ship_hit = true;
                 break;
+            }
+        }
+    }
+
+    // Boss body vs ship: ramming the boss hurts (2D movement makes this
+    // reachable, so it must be a real trade, not free damage).
+    if !ship_hit && ship.invuln_timer <= 0.0 && wave_director.wave_state == WaveState::BossFight {
+        if let Some(boss) = wave_director.current_boss.as_ref() {
+            if rects_overlap(boss.get_rect(), ship.get_rect()) {
+                ship_hit = true;
             }
         }
     }

@@ -292,6 +292,10 @@ impl Boss {
         if new_phase != self.phase {
             self.phase = new_phase;
             self.phase_timer = 0.0;
+            // Phase transitions drop a powerup — consumed by the wave
+            // director, which owns the powerup roster.
+            self.pattern_state
+                .insert("phase_powerup_drop".to_string(), 1.0);
             crate::audio::play_sfx("boss_laugh");
         }
         self.phase_timer += dt;
@@ -649,6 +653,16 @@ impl Boss {
 
     fn spawn_minions(&mut self) {
         self.pattern_state.insert("spawn_minions".to_string(), 1.0);
+    }
+
+    /// True when a phase transition wants a powerup drop; one-shot.
+    pub fn check_phase_powerup_drop(&self) -> bool {
+        *self.pattern_state.get("phase_powerup_drop").unwrap_or(&0.0) > 0.0
+    }
+
+    pub fn clear_phase_powerup_drop(&mut self) {
+        self.pattern_state
+            .insert("phase_powerup_drop".to_string(), 0.0);
     }
 
     pub fn check_revive_signal(&self) -> bool {
@@ -1052,5 +1066,29 @@ mod tests {
         assert!(boss.check_revive_signal());
         boss.clear_revive_signal();
         assert!(!boss.check_revive_signal());
+    }
+
+    /// Phase transitions set the powerup-drop signal exactly once per
+    /// transition.
+    #[test]
+    fn test_phase_change_drops_powerup_signal() {
+        let mut boss = make_boss(150, 150);
+        assert!(!boss.check_phase_powerup_drop());
+
+        // 40% health -> phase 2 transition.
+        boss.health = 60;
+        boss.update_phase(0.016);
+        assert!(boss.check_phase_powerup_drop());
+        boss.clear_phase_powerup_drop();
+        assert!(!boss.check_phase_powerup_drop());
+
+        // No transition on the next tick: no new signal.
+        boss.update_phase(0.016);
+        assert!(!boss.check_phase_powerup_drop());
+
+        // 10% health -> phase 3 transition: signal again.
+        boss.health = 15;
+        boss.update_phase(0.016);
+        assert!(boss.check_phase_powerup_drop());
     }
 }

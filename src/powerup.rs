@@ -237,6 +237,14 @@ impl PowerUpManager {
         self.powerups.push(PowerUp::new(powerup_type, x, y));
     }
 
+    /// Spawns a powerup picked by configured weight (boss phase drops,
+    /// console, ...).
+    pub fn spawn_weighted(&mut self, x: f32, y: f32) {
+        let mut rng = ::rand::thread_rng();
+        let config = weighted_powerup_config(&mut rng);
+        self.spawn_powerup(config.powerup_type, x, y);
+    }
+
     pub fn try_spawn_from_enemy(&mut self, enemy: &crate::enemy::Enemy, wave: u32) {
         let mut rng = ::rand::thread_rng();
         let base_chance = enemy.powerup_chance;

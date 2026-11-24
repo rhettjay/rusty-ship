@@ -33,14 +33,18 @@ impl Ship {
     }
 
     /// `reversed` inverts the controls (Rufus Reverse's signature attack).
+    /// The ship navigates in both dimensions.
     pub fn update_input(&mut self, dt: f32, reversed: bool) {
         let left = is_key_down(KeyCode::Left);
         let right = is_key_down(KeyCode::Right);
+        let up = is_key_down(KeyCode::Up);
+        let down = is_key_down(KeyCode::Down);
         let (left, right) = if reversed {
             (right, left)
         } else {
             (left, right)
         };
+        let (up, down) = if reversed { (down, up) } else { (up, down) };
 
         if left {
             self.x -= self.speed * dt;
@@ -48,7 +52,16 @@ impl Ship {
         if right {
             self.x += self.speed * dt;
         }
+        if up {
+            self.y -= self.speed * dt;
+        }
+        if down {
+            self.y += self.speed * dt;
+        }
         self.x = self.x.clamp(0.0, screen_width() - self.w);
+        // Keep the player below the boss patrol band (bosses live around
+        // y 50-160); tune the margin if that band ever changes.
+        self.y = self.y.clamp(120.0, screen_height() - self.h);
     }
 
     pub fn update(&mut self, dt: f32) {
@@ -62,7 +75,19 @@ impl Ship {
         if self.invuln_timer > 0.0 && (self.invuln_timer * 8.0).sin() > 0.0 {
             return;
         }
-        draw_texture(texture, self.x, self.y, self.color);
+        // Draw scaled to the collision rect (w x h), NOT at the texture's
+        // native size — otherwise the sprite (32x32) sits in the corner of
+        // the rect (60x64) and the shield circles the wrong center.
+        draw_texture_ex(
+            texture,
+            self.x,
+            self.y,
+            self.color,
+            DrawTextureParams {
+                dest_size: Some(Vec2::new(self.w, self.h)),
+                ..Default::default()
+            },
+        );
         if has_shield {
             draw_circle_lines(
                 self.x + self.w / 2.0,
