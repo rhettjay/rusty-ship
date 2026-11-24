@@ -1335,10 +1335,10 @@ fn draw_debug_hitboxes(world: &World) {
 }
 
 fn draw_ui(world: &World, game: &Game) {
-    draw_text(&format!("Score: {}", world.score), 25.0, 25.0, 25.0, WHITE);
-    draw_text(&format!("Lives: {}", world.lives), 25.0, 55.0, 25.0, WHITE);
+    draw_text(format!("Score: {}", world.score), 25.0, 25.0, 25.0, WHITE);
+    draw_text(format!("Lives: {}", world.lives), 25.0, 55.0, 25.0, WHITE);
     draw_text(
-        &format!("Wave: {}", world.wave_director.current_wave),
+        format!("Wave: {}", world.wave_director.current_wave),
         25.0,
         85.0,
         25.0,
@@ -1365,7 +1365,7 @@ fn draw_game_over_screen(world: &World) {
         RED,
     );
     draw_text(
-        &format!("Final Score: {}", world.score),
+        format!("Final Score: {}", world.score),
         screen_width() * 0.5 - 90.0,
         screen_height() * 0.5,
         36.0,
@@ -1416,7 +1416,7 @@ fn draw_victory_screen(world: &World) {
         GOLD,
     );
     draw_text(
-        &format!("Final Score: {}", world.score),
+        format!("Final Score: {}", world.score),
         screen_width() * 0.5 - 90.0,
         screen_height() * 0.45,
         36.0,

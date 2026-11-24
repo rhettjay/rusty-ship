@@ -332,13 +332,7 @@ impl DialogueEngine {
                         let y = choice_start_y + i as f32 * 35.0;
                         let prefix = if i == selected { "► " } else { "  " };
                         let color = if i == selected { LIME } else { WHITE };
-                        draw_text(
-                            &format!("{}{}", prefix, choice.text),
-                            text_x,
-                            y,
-                            22.0,
-                            color,
-                        );
+                        draw_text(format!("{}{}", prefix, choice.text), text_x, y, 22.0, color);
                     }
                 }
             }
