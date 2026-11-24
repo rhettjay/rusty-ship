@@ -349,7 +349,7 @@ impl PowerUpManager {
 
         if self.rapid_fire_timer > 0.0 {
             draw_text(
-                &format!("RAPID FIRE: {:.1}s", self.rapid_fire_timer),
+                format!("RAPID FIRE: {:.1}s", self.rapid_fire_timer),
                 25.0,
                 y,
                 18.0,
@@ -359,7 +359,7 @@ impl PowerUpManager {
         }
         if self.spread_shot_timer > 0.0 {
             draw_text(
-                &format!("SPREAD SHOT: {:.1}s", self.spread_shot_timer),
+                format!("SPREAD SHOT: {:.1}s", self.spread_shot_timer),
                 25.0,
                 y,
                 18.0,
@@ -369,7 +369,7 @@ impl PowerUpManager {
         }
         if self.pierce_timer > 0.0 {
             draw_text(
-                &format!("PIERCE: {:.1}s", self.pierce_timer),
+                format!("PIERCE: {:.1}s", self.pierce_timer),
                 25.0,
                 y,
                 18.0,
