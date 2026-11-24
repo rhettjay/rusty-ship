@@ -36,6 +36,10 @@ pub struct WaveDirector {
     pub powerup_manager: PowerUpManager,
     pub current_boss: Option<Boss>,
     pub is_boss_wave: bool,
+    /// Set when the completion transition fires; blocks re-firing until the
+    /// next start_wave. (Replaces main's old prev-wave-state guard, which
+    /// could not survive the delayed boss-defeat settle window.)
+    pub completion_fired: bool,
     /// High-water mark of simultaneous pirate minions, so "revive minions"
     /// can restore the roster to its recent size.
     minions_peak: usize,
@@ -55,6 +59,7 @@ impl WaveDirector {
             powerup_manager: PowerUpManager::new(),
             current_boss: None,
             is_boss_wave: false,
+            completion_fired: false,
             minions_peak: 0,
         }
     }
@@ -78,6 +83,7 @@ impl WaveDirector {
         self.enemies_spawned = 0;
         self.powerup_manager.powerups.clear();
         self.current_boss = None;
+        self.completion_fired = false;
         self.minions_peak = 0;
     }
 
@@ -111,6 +117,13 @@ impl WaveDirector {
         }
 
         self.wave_timer += dt;
+
+        // Boss fx tick even outside the fight itself (the death explosion
+        // animates during the BossDefeated settle window, and the beam
+        // telegraph counts down inside update_fx).
+        if let Some(boss) = self.current_boss.as_mut() {
+            boss.update_fx(dt, screen_height());
+        }
 
         // Dispatch on wave STATE, not the is_boss_wave flag: the bonus boss
         // (Deadbeef) is installed mid-regular-wave and must still simulate.

@@ -51,7 +51,7 @@ impl GameConfig {
 
             bonus_score_threshold: 50000,
 
-            dialogue_typewriter_speed: 30.0,
+            dialogue_typewriter_speed: 50.0,
             dialogue_box_padding: 20.0,
 
             music_volume: 0.5,
