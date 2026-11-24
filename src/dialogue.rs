@@ -330,7 +330,7 @@ impl DialogueEngine {
                     let choice_start_y = text_y + 80.0;
                     for (i, choice) in choices.iter().enumerate() {
                         let y = choice_start_y + i as f32 * 35.0;
-                        let prefix = if i == selected { "► " } else { "  " };
+                        let prefix = if i == selected { "> " } else { "  " };
                         let color = if i == selected { LIME } else { WHITE };
                         draw_text(format!("{}{}", prefix, choice.text), text_x, y, 22.0, color);
                     }
@@ -392,7 +392,7 @@ impl DialogueEngine {
     }
 
     fn draw_continue_prompt(&self, y: f32) {
-        let prompt = "► Press SPACE to continue";
+        let prompt = "> Press SPACE to continue";
         let x = screen_width() - measure_text(prompt, None, 18, 1.0).width - 20.0;
         let alpha = ((get_time() * 3.0).sin() * 0.5 + 0.5) as f32;
         draw_text(prompt, x, y, 18.0, Color::new(1.0, 1.0, 1.0, alpha));
