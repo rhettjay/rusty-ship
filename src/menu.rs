@@ -167,6 +167,19 @@ pub(crate) fn char_to_byte(input: &str, char_idx: usize) -> usize {
         .unwrap_or(input.len())
 }
 
+/// Whether a character received from `get_char_pressed()` is real typed text
+/// for the dev console.
+///
+/// macOS delivers "characters" for non-text keys (arrows, Home/End, Delete,
+/// F-keys) from the Unicode Private Use Area (U+F700–U+F8FF): Left is
+/// U+F702, Right is U+F703, and so on. miniquad forwards them raw, and the
+/// default font only covers Latin-1 — so unfiltered they pile up in the
+/// input line and render as solid tofu blocks. Control characters (\r from
+/// Enter, ESC, tab) are likewise not typed text.
+pub(crate) fn is_console_typable(ch: char) -> bool {
+    !ch.is_control() && !('\u{E000}'..='\u{F8FF}').contains(&ch)
+}
+
 pub fn draw_console(input: &str, history: &[String], cursor_pos: usize) {
     let overlay_color = Color::new(0.0, 0.0, 0.0, 0.85);
     draw_rectangle(0.0, 0.0, screen_width(), screen_height(), overlay_color);
@@ -215,7 +228,28 @@ pub fn draw_console(input: &str, history: &[String], cursor_pos: usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::char_to_byte;
+    use super::{char_to_byte, is_console_typable};
+
+    /// macOS arrow/Home/End keys arrive as Private Use Area characters and
+    /// must never reach the console input — they render as solid blocks
+    /// (the default font only covers Latin-1).
+    #[test]
+    fn test_console_typable_rejects_pua_and_control_chars() {
+        // Real typed text.
+        for ch in ['a', 'Z', '0', ' ', '/', '?', '\u{e9}'] {
+            assert!(is_console_typable(ch), "{ch:?} should be typable");
+        }
+        // macOS non-text-key pseudo-characters.
+        for ch in [
+            '\u{f700}', '\u{f701}', '\u{f702}', '\u{f703}', '\u{f728}', '\u{f729}', '\u{f72b}',
+        ] {
+            assert!(!is_console_typable(ch), "{ch:?} (PUA) must be rejected");
+        }
+        // Control characters: backspace, DEL, Enter, ESC, tab.
+        for ch in ['\u{8}', '\u{7f}', '\r', '\u{1b}', '\t'] {
+            assert!(!is_console_typable(ch), "{ch:?} (control) must be rejected");
+        }
+    }
 
     #[test]
     fn test_char_to_byte_maps_char_indices() {

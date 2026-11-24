@@ -24,7 +24,10 @@ use collision::rects_overlap;
 use config::CONFIG;
 use dialogue::DialogueEngine;
 use enemy::{Enemy, EnemyType, ShootPattern};
-use menu::{char_to_byte, DialogueCallback, DialogueContext, Game, GameState, NarrativeProgress};
+use menu::{
+    char_to_byte, is_console_typable, DialogueCallback, DialogueContext, Game, GameState,
+    NarrativeProgress,
+};
 use narrative::{check_triggers, NarrativeTrigger};
 use pirate::Pirate;
 use portrait::{Character, PortraitManager};
@@ -351,6 +354,13 @@ fn update_playing(
         return;
     }
     if is_key_pressed(KeyCode::Slash) {
+        // Drop everything queued so far: the char queue is only drained by
+        // the console, so it has been silently accumulating every
+        // non-text-key pseudo-character (macOS arrow keys report U+F700–
+        // U+F8FF) since the game started — plus the '/' that opened this
+        // console. Without this, the input line opens pre-filled with
+        // unrenderable tofu blocks.
+        while get_char_pressed().is_some() {}
         game.state = GameState::Console {
             input: String::new(),
             history: Vec::new(),
@@ -738,7 +748,7 @@ fn update_console(game: &mut Game, world: &mut World) {
 
         let mut chars_to_add = Vec::new();
         while let Some(key) = get_char_pressed() {
-            if key != '\u{8}' && key != '\u{7f}' {
+            if is_console_typable(key) {
                 chars_to_add.push(key);
             }
         }
